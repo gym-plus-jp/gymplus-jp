@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理画面｜Gym plus クーポン</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <h1>
+      <img src="assets/logos/jumpolin.png" class="app-header-logo" alt="" onerror="this.style.display='none'">
+      ⚙️ 管理画面 <span class="badge">ADMIN</span>
+    </h1>
+    <a class="nav-link" href="index.html">← トップ</a>
+  </div>
+</header>
+
+<div class="container-wide">
+
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="students">👥 生徒一覧</div>
+    <div class="tab" data-tab="line">💬 LINE配布キット</div>
+    <div class="tab" data-tab="register">➕ 生徒登録</div>
+    <div class="tab" data-tab="coupons">🎫 クーポン発行</div>
+    <div class="tab" data-tab="history">📊 使用履歴</div>
+    <div class="tab" data-tab="settings">⚙️ 設定</div>
+  </div>
+
+  <!-- 生徒一覧 -->
+  <div class="tab-panel" id="panel-students">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">👥</span>
+        <span>生徒一覧</span>
+      </div>
+      <p class="card-subtitle">
+        各生徒の固有URLを生徒（または保護者）に配布してください。LINEで送る、QRをカード印刷して渡す、どちらでもOK。
+      </p>
+      <div id="students-list"></div>
+    </div>
+  </div>
+
+  <!-- LINE配布キット -->
+  <div class="tab-panel" id="panel-line" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">💬</span>
+        <span>LINE配信キット（自己登録URL）</span>
+      </div>
+      <p class="card-subtitle">
+        この登録URLをLINE公式アカウントで一斉配信するだけ。生徒・保護者が自分で名前と電話下4桁を入力 → 自動でマイページ発行 → 配布中のクーポンが即座に届きます。
+        <strong>CEOの手入力作業はゼロ</strong>です。
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">📌 自己登録URL（このまま配信してOK）</label>
+        <input class="form-input" id="join-url-display" readonly onclick="this.select()">
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="copyJoinUrl()">📋 URLをコピー</button>
+          <a class="btn btn-outline btn-sm" id="join-url-open" target="_blank">↗ 開いて確認</a>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">🔳 配布用QRコード（チラシ・店舗POPに貼付可）</label>
+        <div class="qr-display">
+          <div id="join-qr"></div>
+          <div class="qr-caption">右クリック保存 or スクショで使えます</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">💬 LINE配信テキスト 雛形（コピペで使えます）</label>
+        <textarea class="form-input" id="line-template" rows="11" style="font-family: inherit; resize: vertical;"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="copyLineText()">📋 文面をコピー</button>
+          <button class="btn btn-outline btn-sm" onclick="resetLineText()">↺ 雛形に戻す</button>
+        </div>
+      </div>
+
+      <div style="background:#fef9f5; padding:14px; border-radius:10px;
+           font-size:13px; line-height:1.8; margin-top:16px;">
+        <strong>💡 運用のコツ</strong><br>
+        ① 新しいクーポンを発行 → 「クーポン発行」タブで全員に1クリック配布<br>
+        ② LINE公式で <strong>「新クーポン配布中！マイページからご確認ください 📲（マイページURLは前回の登録時にお伝えしたものです）」</strong> と告知<br>
+        ③ 未登録の方には自己登録URLを案内
+      </div>
+    </div>
+  </div>
+
+  <!-- 生徒登録 -->
+  <div class="tab-panel" id="panel-register" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">➕</span>
+        <span>新規生徒登録</span>
+      </div>
+      <p class="card-subtitle">
+        登録すると、その生徒専用のマイページURLが自動発行されます。
+      </p>
+      <form id="register-form">
+        <div class="form-group">
+          <label class="form-label">お名前</label>
+          <input class="form-input" name="name" required placeholder="例：佐藤 ひかり">
+        </div>
+        <div class="form-group">
+          <label class="form-label">所属クラブ</label>
+          <select class="form-select" name="club" required>
+            <option value="体操クラブ">体操クラブ</option>
+            <option value="Bullets チア">Bullets チア</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">電話番号 下4桁</label>
+          <input class="form-input" name="phoneLast4" required pattern="[0-9]{4}"
+                 maxlength="4" placeholder="例：1234" inputmode="numeric">
+          <div class="form-help">マイページ初回アクセス時の本人確認に使用します</div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">登録する</button>
+      </form>
+      <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border);">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-outline btn-sm" onclick="seedDemo()">🎲 デモデータ投入（3名+3種類クーポン）</button>
+        <button class="btn btn-outline btn-sm" onclick="confirmReset()">🗑 全データリセット</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- クーポン発行 -->
+  <div class="tab-panel" id="panel-coupons" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">🎫</span>
+        <span>クーポンを全員に発行</span>
+      </div>
+      <p class="card-subtitle">
+        現在登録されている全生徒に同じクーポンを一斉配布します。
+      </p>
+      <form id="coupon-form">
+        <div class="form-group">
+          <label class="form-label">クーポン種類</label>
+          <select class="form-select" name="type" required>
+            <option value="割引券">割引券</option>
+            <option value="オマケ">オマケ（ドリンク・延長など）</option>
+            <option value="誕生月特典">誕生月特典</option>
+            <option value="期間限定">期間限定キャンペーン</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">タイトル（クーポン名）</label>
+          <input class="form-input" name="label" required
+                 placeholder="例：夏休み先取り 500円OFF">
+        </div>
+        <div class="form-group">
+          <label class="form-label">詳細説明</label>
+          <input class="form-input" name="detail"
+                 placeholder="例：通常入場料から500円引き">
+        </div>
+        <div class="form-group">
+          <label class="form-label">有効期限</label>
+          <input class="form-input" name="expiresAt" type="date" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">全員に発行する</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 使用履歴 -->
+  <div class="tab-panel" id="panel-history" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">📊</span>
+        <span>使用履歴</span>
+      </div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+
+  <!-- 設定 -->
+  <div class="tab-panel" id="panel-settings" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">⚙️</span>
+        <span>運用設定</span>
+      </div>
+      <form id="settings-form">
+        <div class="form-group">
+          <label class="form-label">友達招待QR：生徒1人あたり 月間発行上限</label>
+          <input class="form-input" name="referralLimitPerMonth" type="number" min="1" max="20" required>
+          <div class="form-help">推奨：2〜5枚。多すぎるとSNS拡散リスクが上がります</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">友達招待QRの有効期限（日数）</label>
+          <input class="form-input" name="referralExpireDays" type="number" min="1" max="60" required>
+          <div class="form-help">推奨：7〜14日。短いほど流用防止効果が高い</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">紹介者へのリファラル特典</label>
+          <input class="form-input" name="referrerRewardLabel" required
+                 placeholder="例：次回ドリンク1杯無料">
+          <div class="form-help">友達が初来店すると、紹介した生徒に自動付与されます</div>
+        </div>
+        <button type="submit" class="btn btn-primary">設定を保存</button>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<!-- 生徒URL/QRモーダル風カード（インライン表示） -->
+<div id="student-detail-modal" style="display:none; position:fixed; inset:0;
+     background:rgba(0,0,0,0.5); z-index:1000; padding:20px; overflow:auto;">
+  <div style="background:#fff; max-width:520px; margin:40px auto; padding:24px;
+       border-radius:16px;">
+    <div id="student-detail-body"></div>
+    <button class="btn btn-outline btn-full" style="margin-top:16px;"
+            onclick="closeStudentDetail()">閉じる</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="assets/db.js"></script>
+<script>
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// タブ切替
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).style.display = '';
+  });
+});
+
+// 統計
+function renderStats() {
+  const db = DB.load();
+  const totalUsed = db.coupons.filter(c => c.usedAt).length;
+  const totalIssued = db.coupons.length;
+  const referralsUsed = db.referralQrs.filter(r => r.usedAt).length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card"><div class="label">登録生徒</div><div class="value">${db.students.length}</div></div>
+    <div class="stat-card"><div class="label">発行クーポン</div><div class="value">${totalIssued}</div></div>
+    <div class="stat-card"><div class="label">使用済み</div><div class="value">${totalUsed}</div></div>
+    <div class="stat-card"><div class="label">友達紹介成立</div><div class="value">${referralsUsed}</div></div>
+  `;
+}
+
+// 生徒一覧
+function renderStudents() {
+  const students = DB.getStudents();
+  const el = document.getElementById('students-list');
+  if (students.length === 0) {
+    el.innerHTML = `<div class="empty">
+      <div class="icon">👤</div>
+      <p>まだ生徒が登録されていません</p>
+      <p style="font-size:13px; margin-top:6px;">「生徒登録」タブから登録するか、「デモデータ投入」で試せます</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = students.map(s => {
+    const coupons = DB.getCouponsForStudent(s.id);
+    const usedCount = coupons.filter(c => c.usedAt).length;
+    return `
+      <div class="student-row">
+        <div>
+          <div class="name">${s.name}</div>
+          <div class="meta">${s.club}　・　電話下4桁 ${s.phoneLast4}　・　所持 ${coupons.length} 枚（うち使用済 ${usedCount}）</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary btn-sm" onclick="showStudentDetail('${s.id}')">URL/QR</button>
+          <button class="btn btn-outline btn-sm" onclick="deleteStudent('${s.id}')">削除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function studentMyPageUrl(token) {
+  const base = location.href.replace(/\/[^/]*$/, '');
+  return base + '/student.html?u=' + token;
+}
+
+function showStudentDetail(studentId) {
+  const s = DB.getStudentById(studentId);
+  if (!s) return;
+  const url = studentMyPageUrl(s.token);
+  const body = document.getElementById('student-detail-body');
+  body.innerHTML = `
+    <h2 style="margin-bottom: 4px;">${s.name}</h2>
+    <p style="color: var(--text-soft); font-size:13px; margin-bottom:16px;">${s.club}</p>
+    <div class="qr-display">
+      <div id="qr-canvas"></div>
+      <div class="qr-caption">このQRをカード印刷 or LINEで送付</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">マイページURL</label>
+      <input class="form-input" readonly value="${url}" onclick="this.select()">
+      <div class="form-help">クリックで全選択 → コピーして配布</div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a class="btn btn-primary btn-sm" href="${url}" target="_blank">マイページを開く</a>
+      <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText('${url}'); toast('URLをコピーしました')">URLをコピー</button>
+    </div>
+  `;
+  document.getElementById('student-detail-modal').style.display = 'block';
+  setTimeout(() => {
+    const el = document.getElementById('qr-canvas');
+    el.innerHTML = '';
+    new QRCode(el, { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+  }, 50);
+}
+function closeStudentDetail() {
+  document.getElementById('student-detail-modal').style.display = 'none';
+}
+
+function deleteStudent(id) {
+  if (!confirm('この生徒と関連クーポンを削除します。よろしいですか？')) return;
+  DB.deleteStudent(id);
+  toast('削除しました');
+  renderAll();
+}
+
+// 履歴
+function renderHistory() {
+  const db = DB.load();
+  const rows = [...db.redemptions].sort((a,b)=>b.at.localeCompare(a.at));
+  const el = document.getElementById('history-list');
+  if (rows.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="icon">📭</div><p>まだ使用履歴はありません</p></div>`;
+    return;
+  }
+  el.innerHTML = `
+    <table class="table">
+      <thead><tr><th>日時</th><th>種別</th><th>対象</th><th>受付</th></tr></thead>
+      <tbody>
+        ${rows.map(r => {
+          const isCoupon = r.kind === 'coupon';
+          const target = isCoupon
+            ? (db.coupons.find(c => c.id === r.refId)?.label || '(削除済)')
+            : '招待QR：' + (db.referralQrs.find(x => x.id === r.refId)?.usedByName || '');
+          const owner = isCoupon
+            ? (db.students.find(s => s.id === db.coupons.find(c => c.id === r.refId)?.studentId)?.name || '')
+            : (db.students.find(s => s.id === db.referralQrs.find(x => x.id === r.refId)?.issuerStudentId)?.name + ' さん紹介');
+          return `<tr>
+            <td>${new Date(r.at).toLocaleString('ja-JP')}</td>
+            <td>${isCoupon ? '🎫 クーポン' : '👯 紹介'}</td>
+            <td><div>${target}</div><div class="meta" style="font-size:11px; color:var(--text-soft)">${owner}</div></td>
+            <td>${r.by}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// 設定読込/保存
+function loadSettings() {
+  const s = DB.getSettings();
+  const f = document.getElementById('settings-form');
+  f.referralLimitPerMonth.value = s.referralLimitPerMonth;
+  f.referralExpireDays.value = s.referralExpireDays;
+  f.referrerRewardLabel.value = s.referrerRewardLabel;
+}
+
+document.getElementById('settings-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  DB.updateSettings({
+    referralLimitPerMonth: parseInt(f.referralLimitPerMonth.value, 10),
+    referralExpireDays: parseInt(f.referralExpireDays.value, 10),
+    referrerRewardLabel: f.referrerRewardLabel.value,
+  });
+  toast('設定を保存しました');
+});
+
+// 生徒登録
+document.getElementById('register-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  const s = DB.addStudent({
+    name: f.name.value.trim(),
+    club: f.club.value,
+    phoneLast4: f.phoneLast4.value.trim(),
+  });
+  f.reset();
+  toast(`${s.name} さんを登録しました`);
+  renderAll();
+  document.querySelector('[data-tab="students"]').click();
+  showStudentDetail(s.id);
+});
+
+// クーポン発行
+document.getElementById('coupon-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  const n = DB.issueCouponToAll({
+    type: f.type.value,
+    label: f.label.value.trim(),
+    detail: f.detail.value.trim(),
+    expiresAt: f.expiresAt.value ? f.expiresAt.value + 'T23:59:59' : null,
+  });
+  f.reset();
+  toast(`${n} 名にクーポンを発行しました`);
+  renderAll();
+});
+
+function seedDemo() {
+  const ok = DB.seedDemoData();
+  if (ok) {
+    toast('デモデータを投入しました');
+    renderAll();
+  } else {
+    toast('既に生徒が登録されているため投入をスキップしました');
+  }
+}
+
+function confirmReset() {
+  if (!confirm('全データを削除して初期状態に戻します。よろしいですか？')) return;
+  DB.resetAll();
+  toast('リセットしました');
+  renderAll();
+  loadSettings();
+}
+
+function joinUrl() {
+  const base = location.href.replace(/\/[^/]*$/, '');
+  return base + '/join.html';
+}
+
+function defaultLineText() {
+  return `📣【Jumpolin（トランポリンパーク）】
+あしかが体操クラブ（AGC）・Bullets チア教室
+会員さま限定 特別クーポン配布のお知らせ 🎁
+
+▼割引券・特典クーポンが今すぐもらえます
+${joinUrl()}
+
+👆 上のリンクから「クーポン受け取り登録」（30秒で完了）
+お名前と電話下4桁を入れるだけで、あなた専用のマイページが作られます。
+
+🤸 配布中のクーポン例
+・夏休み先取り 500円OFF
+・初夏のドリンクサービス
+・誕生月特典 入場料20%OFF
+
+▼お友達もぜひ！ マイページから「友達招待QR」が発行できます
+紹介してくれた方には「次回ドリンク1杯無料」のお礼特典をプレゼント🥤
+
+ご不明な点は当アカウントにメッセージください。
+────────
+運営：株式会社 Gym plus`;
+}
+
+function renderLineKit() {
+  const url = joinUrl();
+  document.getElementById('join-url-display').value = url;
+  document.getElementById('join-url-open').href = url;
+  const qrEl = document.getElementById('join-qr');
+  if (qrEl) {
+    qrEl.innerHTML = '';
+    new QRCode(qrEl, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  }
+  const saved = localStorage.getItem('gymplus_line_template');
+  document.getElementById('line-template').value = saved || defaultLineText();
+}
+
+function copyJoinUrl() {
+  navigator.clipboard.writeText(joinUrl());
+  toast('URLをコピーしました');
+}
+
+function copyLineText() {
+  const text = document.getElementById('line-template').value;
+  navigator.clipboard.writeText(text);
+  localStorage.setItem('gymplus_line_template', text);
+  toast('LINE文面をコピーしました');
+}
+
+function resetLineText() {
+  document.getElementById('line-template').value = defaultLineText();
+  localStorage.removeItem('gymplus_line_template');
+  toast('雛形に戻しました');
+}
+
+function renderAll() {
+  renderStats();
+  renderStudents();
+  renderHistory();
+  renderLineKit();
+}
+
+renderAll();
+loadSettings();
+</script>
+</body>
+</html>

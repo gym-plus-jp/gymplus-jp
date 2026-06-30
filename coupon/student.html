@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>マイページ｜Jumpolin クーポン</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <h1>
+      <img src="assets/logos/jumpolin.png" class="app-header-logo" alt="" onerror="this.style.display='none'">
+      🎫 マイページ
+    </h1>
+    <a class="nav-link" href="index.html">トップ</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- 入口エラー -->
+  <div id="error-view" class="card" style="display:none;">
+    <div class="card-title">
+      <span class="icon">⚠️</span>
+      <span id="error-title">エラー</span>
+    </div>
+    <p id="error-msg" style="color: var(--text-soft);"></p>
+    <div style="margin-top:16px;">
+      <a href="index.html" class="btn btn-outline btn-sm">トップへ戻る</a>
+    </div>
+  </div>
+
+  <!-- 初回認証 -->
+  <div id="auth-view" class="card" style="display:none;">
+    <div class="card-title">
+      <span class="icon">🔐</span>
+      <span>本人確認（初回のみ）</span>
+    </div>
+    <p class="card-subtitle">
+      ご登録の電話番号 <strong>下4桁</strong> を入力してください。次回からは入力不要です。
+    </p>
+    <form id="auth-form">
+      <div class="form-group">
+        <input class="form-input" id="auth-phone" required pattern="[0-9]{4}"
+               maxlength="4" inputmode="numeric" placeholder="例：1234"
+               style="font-size:22px; text-align:center; letter-spacing: 0.3em;">
+      </div>
+      <button type="submit" class="btn btn-primary btn-full">確認する</button>
+    </form>
+  </div>
+
+  <!-- メイン -->
+  <div id="main-view" style="display:none;">
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <div style="font-size: 12px; color: var(--text-soft);">ようこそ</div>
+          <div style="font-size: 22px; font-weight: 800;" id="welcome-name"></div>
+          <div style="font-size: 13px; color: var(--text-soft);" id="welcome-club"></div>
+        </div>
+        <div style="font-size: 48px;">🤸</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="mycoupons">🎫 マイクーポン</div>
+      <div class="tab" data-tab="invite">👯 友達招待</div>
+    </div>
+
+    <div class="tab-panel" id="panel-mycoupons">
+      <div id="coupons-list"></div>
+    </div>
+
+    <div class="tab-panel" id="panel-invite" style="display:none;">
+      <div class="card">
+        <div class="card-title">
+          <span class="icon">👯</span>
+          <span>友達を招待する</span>
+        </div>
+        <p class="card-subtitle">
+          友達招待QRを発行できます。お友達が Jumpolin（トランポリンパーク）で提示すると<strong>割引</strong>になり、
+          あなたにも<strong id="reward-label-hint"></strong>のお礼特典が届きます。
+        </p>
+        <div id="invite-quota" style="background:#f3f4f6; padding:12px 14px;
+             border-radius:10px; font-size:13px; margin-bottom:16px;"></div>
+        <button id="issue-referral-btn" class="btn btn-primary btn-full">
+          📨 招待QRを発行する
+        </button>
+        <div id="invite-list" style="margin-top:20px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- クーポン詳細モーダル -->
+<div id="coupon-modal" style="display:none; position:fixed; inset:0;
+     background:rgba(0,0,0,0.6); z-index:1000; padding:20px; overflow:auto;">
+  <div style="background:#fff; max-width:420px; margin:20px auto; padding:24px;
+       border-radius:16px;">
+    <div id="coupon-modal-body"></div>
+    <button class="btn btn-outline btn-full" style="margin-top:16px;"
+            onclick="closeCouponModal()">閉じる</button>
+  </div>
+</div>
+
+<!-- 招待QRモーダル -->
+<div id="invite-modal" style="display:none; position:fixed; inset:0;
+     background:rgba(0,0,0,0.6); z-index:1000; padding:20px; overflow:auto;">
+  <div style="background:#fff; max-width:420px; margin:20px auto; padding:24px;
+       border-radius:16px;">
+    <div id="invite-modal-body"></div>
+    <button class="btn btn-outline btn-full" style="margin-top:16px;"
+            onclick="closeInviteModal()">閉じる</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="assets/db.js"></script>
+<script>
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function show(id) { document.getElementById(id).style.display = ''; }
+function hide(id) { document.getElementById(id).style.display = 'none'; }
+
+const params = new URLSearchParams(location.search);
+const token = params.get('u');
+let student = null;
+
+if (!token) {
+  show('error-view');
+  document.getElementById('error-title').textContent = 'URLが不正です';
+  document.getElementById('error-msg').textContent =
+    'マイページにはご自分の固有URLからアクセスしてください。管理画面で発行された URL（?u=... を含むもの）を開いてください。';
+} else {
+  student = DB.getStudentByToken(token);
+  if (!student) {
+    show('error-view');
+    document.getElementById('error-title').textContent = '生徒情報が見つかりません';
+    document.getElementById('error-msg').textContent =
+      'URLが古いか、登録が解除されている可能性があります。管理者にお問い合わせください。';
+  } else {
+    // 端末認証
+    const key = 'gymplus_verified_' + student.id;
+    if (localStorage.getItem(key) === '1') {
+      initMain();
+    } else {
+      show('auth-view');
+    }
+  }
+}
+
+document.getElementById('auth-form')?.addEventListener('submit', e => {
+  e.preventDefault();
+  const input = document.getElementById('auth-phone').value.trim();
+  if (input === student.phoneLast4) {
+    localStorage.setItem('gymplus_verified_' + student.id, '1');
+    DB.markStudentVerified(student.id);
+    hide('auth-view');
+    initMain();
+  } else {
+    toast('番号が一致しません');
+  }
+});
+
+function initMain() {
+  show('main-view');
+  document.getElementById('welcome-name').textContent = student.name + ' さん';
+  document.getElementById('welcome-club').textContent = student.club;
+  document.getElementById('reward-label-hint').textContent =
+    DB.getSettings().referrerRewardLabel;
+  renderCoupons();
+  renderInvite();
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).style.display = '';
+  });
+});
+
+function couponStatusBadge(c) {
+  if (c.usedAt) return '<span class="badge-status badge-used">使用済み</span>';
+  if (c.expiresAt && new Date(c.expiresAt) < new Date())
+    return '<span class="badge-status badge-expired">期限切れ</span>';
+  if (c.type === 'referral_reward')
+    return '<span class="badge-status badge-referral">紹介特典</span>';
+  return '<span class="badge-status badge-available">利用可</span>';
+}
+
+function renderCoupons() {
+  const coupons = DB.getCouponsForStudent(student.id);
+  const el = document.getElementById('coupons-list');
+  if (coupons.length === 0) {
+    el.innerHTML = `<div class="card empty">
+      <div class="icon">📭</div>
+      <p>まだクーポンがありません</p>
+    </div>`;
+    return;
+  }
+  const sorted = [...coupons].sort((a,b) => {
+    if (!!a.usedAt !== !!b.usedAt) return a.usedAt ? 1 : -1;
+    return b.issuedAt.localeCompare(a.issuedAt);
+  });
+  el.innerHTML = sorted.map(c => `
+    <div class="coupon ${c.usedAt ? 'used' : ''}">
+      <div style="display:flex; justify-content:space-between; align-items:start; gap:8px;">
+        <div>
+          <div class="coupon-type">${c.type === 'referral_reward' ? '紹介特典' : c.type}</div>
+          <div class="coupon-title">${c.label}</div>
+          ${c.detail ? `<div style="font-size:13px; color:var(--text-soft); margin-top:4px;">${c.detail}</div>` : ''}
+        </div>
+        ${couponStatusBadge(c)}
+      </div>
+      <div class="coupon-meta">
+        ${c.expiresAt ? '期限：' + new Date(c.expiresAt).toLocaleDateString('ja-JP') : '期限なし'}
+        ${c.usedAt ? '・使用：' + new Date(c.usedAt).toLocaleDateString('ja-JP') : ''}
+      </div>
+      ${!c.usedAt && (!c.expiresAt || new Date(c.expiresAt) >= new Date()) ? `
+        <div class="coupon-actions">
+          <button class="btn btn-primary btn-sm" onclick="showCouponQr('${c.id}')">📷 受付で使う</button>
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function showCouponQr(couponId) {
+  const c = DB.getCouponsForStudent(student.id).find(x => x.id === couponId);
+  if (!c) return;
+  const payload = 'cp:' + c.token;
+  const body = document.getElementById('coupon-modal-body');
+  body.innerHTML = `
+    <div class="coupon-type">${c.type}</div>
+    <div class="coupon-title">${c.label}</div>
+    ${c.detail ? `<div style="font-size:13px; color:var(--text-soft); margin-top:4px;">${c.detail}</div>` : ''}
+    <div class="qr-display">
+      <div id="coupon-qr-canvas"></div>
+      <div class="qr-caption">受付スタッフに画面を見せてください</div>
+    </div>
+    <div style="font-size:12px; color:var(--text-soft); text-align:center;">
+      ※ スタッフが「使用OK」ボタンを押した瞬間に消費されます
+    </div>
+  `;
+  document.getElementById('coupon-modal').style.display = 'block';
+  setTimeout(() => {
+    const el = document.getElementById('coupon-qr-canvas');
+    el.innerHTML = '';
+    new QRCode(el, { text: payload, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  }, 50);
+}
+function closeCouponModal() {
+  document.getElementById('coupon-modal').style.display = 'none';
+  renderCoupons();
+}
+
+function renderInvite() {
+  const settings = DB.getSettings();
+  const issued = DB.countReferralIssuedThisMonth(student.id);
+  const remaining = Math.max(0, settings.referralLimitPerMonth - issued);
+  document.getElementById('invite-quota').innerHTML = `
+    今月の発行可能枚数：<strong>${remaining} / ${settings.referralLimitPerMonth}</strong>
+    （有効期限：発行から${settings.referralExpireDays}日）
+  `;
+  const btn = document.getElementById('issue-referral-btn');
+  btn.disabled = remaining === 0;
+  btn.style.opacity = remaining === 0 ? 0.5 : 1;
+  if (remaining === 0) btn.textContent = '今月の上限に達しました';
+
+  const all = DB.getReferralQrsForStudent(student.id)
+    .sort((a,b) => b.issuedAt.localeCompare(a.issuedAt));
+  const el = document.getElementById('invite-list');
+  if (all.length === 0) {
+    el.innerHTML = `<div class="empty" style="padding:20px;">
+      <div style="font-size:13px;">まだ招待QRは発行していません</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML = '<h3 style="font-size:14px; color:var(--text-soft); margin-bottom:10px;">発行済み</h3>' +
+    all.map(r => {
+      let status, badge;
+      if (r.usedAt) { status = '✅ 利用済み（' + r.usedByName + 'さん）'; badge = 'badge-used'; }
+      else if (new Date(r.expiresAt) < new Date()) { status = '⏰ 期限切れ'; badge = 'badge-expired'; }
+      else { status = '📨 利用待ち'; badge = 'badge-available'; }
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center;
+             padding:10px 0; border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-size:13px;">発行：${new Date(r.issuedAt).toLocaleDateString('ja-JP')}</div>
+            <div style="font-size:11px; color:var(--text-soft);">期限：${new Date(r.expiresAt).toLocaleDateString('ja-JP')}</div>
+            <div style="font-size:12px; margin-top:2px;">${status}</div>
+          </div>
+          ${!r.usedAt && new Date(r.expiresAt) >= new Date()
+            ? `<button class="btn btn-outline btn-sm" onclick="showInviteQr('${r.id}')">QR表示</button>`
+            : ''}
+        </div>
+      `;
+    }).join('');
+}
+
+document.getElementById('issue-referral-btn').addEventListener('click', () => {
+  const result = DB.issueReferralQr(student.id);
+  if (!result.ok) {
+    if (result.reason === 'monthly_limit') toast('今月の発行上限に達しました');
+    else toast('発行に失敗しました');
+    return;
+  }
+  toast('招待QRを発行しました');
+  renderInvite();
+  showInviteQr(result.referral.id);
+});
+
+function showInviteQr(referralId) {
+  const r = DB.getReferralQrsForStudent(student.id).find(x => x.id === referralId);
+  if (!r) return;
+  const payload = 'rf:' + r.token;
+  const body = document.getElementById('invite-modal-body');
+  body.innerHTML = `
+    <h2 style="font-size:18px;">友達招待QR</h2>
+    <p style="font-size:13px; color:var(--text-soft); margin-top:4px;">
+      このQRをスクリーンショットしてLINEで友達に送るか、その場で見せてください。
+    </p>
+    <div class="qr-display">
+      <div id="invite-qr-canvas"></div>
+      <div class="qr-caption">
+        期限：${new Date(r.expiresAt).toLocaleDateString('ja-JP')}<br>
+        ※ 1人1回のみ有効
+      </div>
+    </div>
+    <div style="background:#fef9f5; padding:12px; border-radius:10px;
+         font-size:13px; line-height:1.7; color:var(--text);">
+      📝 <strong>使い方</strong><br>
+      ① 友達が Jumpolin に来店<br>
+      ② 受付でこのQRを提示<br>
+      ③ 友達は割引適用、あなたには「<strong>${DB.getSettings().referrerRewardLabel}</strong>」が届きます
+    </div>
+  `;
+  document.getElementById('invite-modal').style.display = 'block';
+  setTimeout(() => {
+    const el = document.getElementById('invite-qr-canvas');
+    el.innerHTML = '';
+    new QRCode(el, { text: payload, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  }, 50);
+}
+function closeInviteModal() {
+  document.getElementById('invite-modal').style.display = 'none';
+  renderInvite();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jumpolin クーポンシステム｜Gym plus</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="landing-hero">
+  <div class="logo">
+    <img src="assets/logos/jumpolin.png" alt="Jumpolin" onerror="this.outerHTML='🤸'"
+         style="max-width: 180px; height: auto;">
+  </div>
+  <h1><span class="accent">Jumpolin</span><br>会員クーポン</h1>
+  <p class="tagline">あしかが体操クラブ（AGC）・Bullets チア教室 会員様限定<br>
+    <span style="font-size:11px;">Jumpolin（トランポリンパーク）でお得にあそぼう</span></p>
+
+  <div class="landing-actions">
+    <a href="join.html" class="btn btn-primary">
+      🎫 クーポンを受け取る（新規登録）
+    </a>
+    <a href="staff.html" class="btn btn-secondary">
+      📷 受付スタッフ用（QRスキャン）
+    </a>
+    <a href="admin.html" class="btn btn-outline">
+      ⚙️ 管理画面（CEO/事務局）
+    </a>
+  </div>
+  <p style="margin-top: 16px; font-size: 12px; color: var(--text-soft);">
+    登録済みの方は前回お送りした<strong>マイページURL</strong>からアクセスしてください
+  </p>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">💡</span>
+      <span>このプロトタイプについて</span>
+    </div>
+    <p style="color: var(--text-soft); font-size: 14px; line-height: 1.8;">
+      この画面は <strong>概念実証用のプロトタイプ</strong>です。
+      データは一時的にブラウザ内に保存されます。本番化時に Supabase（クラウドDB）に差し替え、HTTPS化＋独自ドメインで実機運用に進めます。
+    </p>
+    <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+      <a href="admin.html" class="btn btn-primary btn-sm">管理画面ですぐ試す →</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">🔄</span>
+      <span>仕組み（C案：ハイブリッド紹介型）</span>
+    </div>
+    <ol style="padding-left: 20px; color: var(--text); font-size: 14px; line-height: 1.9;">
+      <li>LINE公式アカウントで<strong>自己登録URL</strong>を一斉配信</li>
+      <li>会員様が名前と電話下4桁を入力 → 自動でマイページ発行＆クーポン受取</li>
+      <li>マイページから<strong>友達招待QR</strong>も発行可（月2枚まで）</li>
+      <li>友達はQRをJumpolin受付で提示 → 友達は<strong>割引</strong>、紹介した会員には<strong>ドリンク無料</strong>などのお礼特典が自動付与</li>
+      <li>使用済みQRは即座に無効化 → 紙コピーや流用は技術的に防止</li>
+    </ol>
+  </div>
+
+  <div style="text-align: center; margin-top: 32px; padding: 20px; color: var(--text-soft); font-size: 12px;">
+    運営：株式会社 Gym plus<br>
+    Jumpolin / あしかが体操クラブ（AGC） / Bullets チア教室
+  </div>
+</div>
+
+<script src="assets/db.js"></script>
+</body>
+</html>

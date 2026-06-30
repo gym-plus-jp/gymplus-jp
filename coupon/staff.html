@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>受付スキャナー｜Gym plus クーポン</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <h1>
+      <img src="assets/logos/jumpolin.png" class="app-header-logo" alt="" onerror="this.style.display='none'">
+      📷 受付スキャナー <span class="badge">STAFF</span>
+    </h1>
+    <a class="nav-link" href="index.html">トップ</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">📷</span>
+      <span>QRコードをスキャン</span>
+    </div>
+    <p class="card-subtitle">
+      生徒のクーポンQR、または友達招待QRをカメラで読み取ります。
+    </p>
+    <div id="qr-reader"></div>
+    <div style="display:flex; gap:8px; margin-top:12px; flex-wrap: wrap;">
+      <button id="start-btn" class="btn btn-primary btn-sm">📷 カメラ起動</button>
+      <button id="stop-btn" class="btn btn-outline btn-sm" disabled>停止</button>
+      <button class="btn btn-ghost btn-sm" onclick="openManual()">⌨️ 手動入力（テスト用）</button>
+    </div>
+  </div>
+
+  <div id="result-area"></div>
+
+  <!-- 友達名入力モーダル -->
+  <div id="friend-modal" style="display:none; position:fixed; inset:0;
+       background:rgba(0,0,0,0.6); z-index:1000; padding:20px; overflow:auto;">
+    <div style="background:#fff; max-width:420px; margin:40px auto; padding:24px;
+         border-radius:16px;">
+      <h2 style="font-size:18px; margin-bottom:4px;">👯 友達招待QR</h2>
+      <p style="font-size:13px; color:var(--text-soft); margin-bottom:16px;">
+        紹介された<strong>お友達のお名前</strong>を入力してください（履歴記録用）。
+      </p>
+      <div class="form-group">
+        <input class="form-input" id="friend-name" placeholder="例：山田 こうき" />
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary btn-full" onclick="confirmFriend()">割引適用 → 紹介者に特典を付与</button>
+        <button class="btn btn-outline btn-sm" onclick="closeFriendModal()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 手動入力モーダル -->
+  <div id="manual-modal" style="display:none; position:fixed; inset:0;
+       background:rgba(0,0,0,0.6); z-index:1000; padding:20px; overflow:auto;">
+    <div style="background:#fff; max-width:420px; margin:40px auto; padding:24px;
+         border-radius:16px;">
+      <h2 style="font-size:18px; margin-bottom:8px;">⌨️ 手動入力（テスト用）</h2>
+      <p style="font-size:12px; color:var(--text-soft); margin-bottom:12px;">
+        QRコードの中身（cp:... or rf:...）を貼り付けてください。デモ環境でカメラを使わない場合に。
+      </p>
+      <div class="form-group">
+        <input class="form-input" id="manual-input" placeholder="cp:xxxxxxxx または rf:xxxxxxxx">
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary btn-full" onclick="processManual()">読み取り</button>
+        <button class="btn btn-outline btn-sm" onclick="closeManual()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="assets/db.js"></script>
+<script>
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+let html5QrCode = null;
+let lastScannedAt = 0;
+let pendingReferral = null;
+
+document.getElementById('start-btn').addEventListener('click', startScan);
+document.getElementById('stop-btn').addEventListener('click', stopScan);
+
+async function startScan() {
+  if (!html5QrCode) html5QrCode = new Html5Qrcode('qr-reader');
+  try {
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      onScanSuccess,
+      () => {}
+    );
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('stop-btn').disabled = false;
+  } catch (err) {
+    toast('カメラ起動に失敗しました');
+    console.error(err);
+  }
+}
+
+async function stopScan() {
+  if (html5QrCode) {
+    try { await html5QrCode.stop(); } catch(e) {}
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('stop-btn').disabled = true;
+  }
+}
+
+function onScanSuccess(decodedText) {
+  // 重複読み取り防止
+  const now = Date.now();
+  if (now - lastScannedAt < 1500) return;
+  lastScannedAt = now;
+  processScan(decodedText);
+}
+
+function processScan(text) {
+  if (text.startsWith('cp:')) {
+    const c = DB.getCouponByToken(text.slice(3));
+    if (!c) return showResult({ ok:false, big:'❓', title:'不明なQR', detail:'登録されていないクーポンです' });
+    const student = DB.getStudentById(c.studentId);
+    if (c.usedAt) return showResult({ ok:false, big:'❌', title:'使用済み',
+      detail:`このクーポンは ${new Date(c.usedAt).toLocaleString('ja-JP')} に使用済みです`,
+      sub:`${student?.name || ''} さん / ${c.label}`});
+    if (c.expiresAt && new Date(c.expiresAt) < new Date())
+      return showResult({ ok:false, warn:true, big:'⏰', title:'期限切れ',
+        detail:`有効期限：${new Date(c.expiresAt).toLocaleDateString('ja-JP')}`,
+        sub:`${student?.name || ''} さん / ${c.label}`});
+    showCouponConfirm(c, student);
+  } else if (text.startsWith('rf:')) {
+    const r = DB.getReferralByToken(text.slice(3));
+    if (!r) return showResult({ ok:false, big:'❓', title:'不明なQR', detail:'登録されていない招待QRです' });
+    if (r.usedAt) return showResult({ ok:false, big:'❌', title:'使用済み',
+      detail:`この招待QRは ${new Date(r.usedAt).toLocaleString('ja-JP')} に使用済み（${r.usedByName}さん）`,
+      sub:`${r.issuerName} さん発行`});
+    if (new Date(r.expiresAt) < new Date())
+      return showResult({ ok:false, warn:true, big:'⏰', title:'期限切れ',
+        detail:`有効期限：${new Date(r.expiresAt).toLocaleDateString('ja-JP')}`,
+        sub:`${r.issuerName} さん発行`});
+    pendingReferral = r;
+    document.getElementById('friend-name').value = '';
+    document.getElementById('friend-modal').style.display = 'block';
+    setTimeout(() => document.getElementById('friend-name').focus(), 100);
+  } else {
+    showResult({ ok:false, big:'❓', title:'対応外のQR', detail:'このシステム用のQRではありません' });
+  }
+}
+
+function showCouponConfirm(c, student) {
+  const area = document.getElementById('result-area');
+  area.innerHTML = `
+    <div class="card" style="border:2px solid var(--primary);">
+      <div class="card-title">
+        <span class="icon">🎫</span>
+        <span>クーポン確認</span>
+      </div>
+      <div style="font-size:13px; color:var(--text-soft);">${student?.name || ''} さん（${student?.club || ''}）</div>
+      <div style="font-size:11px; color:var(--primary); font-weight:700; margin-top:8px;">${c.type}</div>
+      <div style="font-size:22px; font-weight:800; margin:4px 0;">${c.label}</div>
+      ${c.detail ? `<div style="font-size:13px; color:var(--text-soft);">${c.detail}</div>` : ''}
+      <div style="font-size:12px; color:var(--text-soft); margin-top:8px;">
+        有効期限：${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('ja-JP') : 'なし'}
+      </div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button class="btn btn-primary btn-full" onclick="confirmRedeemCoupon('${c.id}')">✅ 使用する</button>
+        <button class="btn btn-outline btn-sm" onclick="clearResult()">キャンセル</button>
+      </div>
+    </div>
+  `;
+  area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function confirmRedeemCoupon(couponId) {
+  const r = DB.redeemCoupon(couponId, '受付');
+  if (!r.ok) {
+    showResult({ ok:false, big:'❌', title:'処理失敗', detail: r.reason });
+    return;
+  }
+  showResult({
+    ok:true, big:'✅', title:'使用OK',
+    detail:`${r.coupon.label} を消費しました`,
+    sub:`${new Date(r.coupon.usedAt).toLocaleString('ja-JP')}`,
+  });
+}
+
+function confirmFriend() {
+  const name = document.getElementById('friend-name').value.trim() || '（記名なし）';
+  const r = DB.redeemReferralQr(pendingReferral.id, name, '受付');
+  closeFriendModal();
+  if (!r.ok) {
+    showResult({ ok:false, big:'❌', title:'処理失敗', detail: r.reason });
+    return;
+  }
+  const issuer = DB.getStudentById(r.referral.issuerStudentId);
+  showResult({
+    ok:true, big:'✅', title:'招待QR 適用',
+    detail:`${name} さんに割引を適用しました`,
+    sub:`紹介者：${issuer?.name || ''} さんに「${DB.getSettings().referrerRewardLabel}」を付与`,
+  });
+  pendingReferral = null;
+}
+
+function closeFriendModal() {
+  document.getElementById('friend-modal').style.display = 'none';
+  pendingReferral = null;
+}
+
+function showResult({ ok, warn, big, title, detail, sub }) {
+  const cls = ok ? 'ok' : (warn ? 'warn' : 'ng');
+  const area = document.getElementById('result-area');
+  area.innerHTML = `
+    <div class="scan-result ${cls}">
+      <div class="big-icon">${big}</div>
+      <div class="big-title">${title}</div>
+      <div class="detail">${detail || ''}</div>
+      ${sub ? `<div style="font-size:12px; color:var(--text-soft); margin-bottom:12px;">${sub}</div>` : ''}
+      <button class="btn btn-outline btn-sm" onclick="clearResult()">続けて読み取る</button>
+    </div>
+  `;
+  area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function clearResult() {
+  document.getElementById('result-area').innerHTML = '';
+}
+
+// 手動入力（デモ用）
+function openManual() {
+  document.getElementById('manual-modal').style.display = 'block';
+  setTimeout(() => document.getElementById('manual-input').focus(), 100);
+}
+function closeManual() {
+  document.getElementById('manual-modal').style.display = 'none';
+}
+function processManual() {
+  const v = document.getElementById('manual-input').value.trim();
+  if (!v) return toast('入力してください');
+  closeManual();
+  processScan(v);
+}
+</script>
+</body>
+</html>

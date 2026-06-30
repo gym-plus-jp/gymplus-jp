@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>クーポンを受け取る｜Jumpolin × Gym plus</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <h1>
+      <img src="assets/logos/jumpolin.png" class="app-header-logo" alt="" onerror="this.style.display='none'">
+      🎫 クーポン受け取り登録
+    </h1>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- 入口 -->
+  <div id="intro-view">
+    <div class="card">
+      <div style="text-align:center; margin-bottom:12px;">
+        <img src="assets/logos/jumpolin.png" alt="Jumpolin"
+             onerror="this.style.display='none'"
+             style="max-width:140px; height:auto;">
+      </div>
+      <div class="card-title">
+        <span class="icon">🎁</span>
+        <span>Jumpolin 会員様限定クーポン</span>
+      </div>
+      <p style="font-size: 14px; line-height: 1.8; color: var(--text);">
+        <strong>あしかが体操クラブ（AGC）</strong>・<strong>Bullets チア教室</strong>の
+        会員様限定で、<strong>Jumpolin（トランポリンパーク）</strong>でお使いいただける
+        <strong>割引券・特典クーポン</strong>を配布しています。
+      </p>
+      <p style="font-size: 13px; color: var(--text-soft); margin-top: 8px;">
+        以下に <strong>お名前</strong> と <strong>ご登録の電話番号 下4桁</strong> を入力すると、
+        あなた専用のマイページが発行されます（30秒で完了）。
+      </p>
+
+      <div style="background:#fef9f5; padding:14px; border-radius:10px;
+           margin-top:16px; font-size:13px; line-height:1.7;">
+        🎁 <strong>登録すると今すぐもらえるクーポン例</strong><br>
+        ・夏休み先取りキャンペーン 500円OFF<br>
+        ・初夏のドリンクサービス<br>
+        ・誕生月特典 入場料20%OFF<br>
+        ※ 配布内容は時期により変わります
+      </div>
+    </div>
+
+    <div class="card">
+      <form id="join-form">
+        <div class="form-group">
+          <label class="form-label">お子様（または会員ご本人）のお名前</label>
+          <input class="form-input" name="name" required placeholder="例：佐藤 ひかり" autocomplete="name">
+          <div class="form-help">クラブ登録のお名前で入力してください</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">所属クラブ</label>
+          <select class="form-select" name="club" required>
+            <option value="">選択してください</option>
+            <option value="AGC">あしかが体操クラブ（AGC）</option>
+            <option value="Bullets">Bullets チア教室</option>
+            <option value="AGC+Bullets">AGC + Bullets 両方</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">ご登録の電話番号 下4桁</label>
+          <input class="form-input" name="phoneLast4" required pattern="[0-9]{4}"
+                 maxlength="4" inputmode="numeric" placeholder="例：1234"
+                 autocomplete="off"
+                 style="font-size: 18px; letter-spacing: 0.1em;">
+          <div class="form-help">クラブへご登録の保護者様電話番号 下4桁</div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">
+          🎫 クーポンを受け取る
+        </button>
+        <p style="font-size: 11px; color: var(--text-soft); margin-top: 12px; text-align: center;">
+          ※ 登録内容は本人確認のみに使用します
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <!-- 完了 -->
+  <div id="done-view" style="display:none;">
+    <div class="card" style="text-align:center;">
+      <div style="font-size: 56px;">🎉</div>
+      <h2 style="font-size: 22px; margin: 8px 0;" id="done-greeting"></h2>
+      <p style="color: var(--text-soft); font-size: 14px;" id="done-msg"></p>
+      <div style="margin: 24px 0;">
+        <a id="goto-mypage" class="btn btn-primary btn-full" href="#">
+          🎫 マイクーポンを見る
+        </a>
+      </div>
+      <div style="background:var(--primary-soft); padding:14px; border-radius:10px;
+           font-size:12px; line-height:1.7; text-align:left;">
+        💡 <strong>このページをブックマーク</strong>しておくと、次回からURLだけでマイページにアクセスできます。
+        LINEのお友達にも自分のページのURLは<strong>共有しないでください</strong>
+        （流用防止のため、Jumpolin来店時はQR提示・1回のみ有効です）。
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align: center; margin-top: 24px; padding: 16px; color: var(--text-soft); font-size: 11px;">
+    運営：株式会社 Gym plus<br>
+    Jumpolin / あしかが体操クラブ（AGC） / Bullets チア教室
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="assets/db.js"></script>
+<script>
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+document.getElementById('join-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  const name = f.name.value.trim();
+  const club = f.club.value;
+  const phoneLast4 = f.phoneLast4.value.trim();
+  if (!/^[0-9]{4}$/.test(phoneLast4)) {
+    toast('電話下4桁は数字4桁で入力してください');
+    return;
+  }
+  const result = DB.upsertStudent({ name, club, phoneLast4 });
+  const student = result.student;
+
+  // 既存・新規どちらでも、有効なキャンペーンを自動配布（重複は無視される）
+  const issued = DB.issueActiveCampaignsToStudent(student.id);
+
+  // この端末を認証済みにしておく
+  localStorage.setItem('gymplus_verified_' + student.id, '1');
+  DB.markStudentVerified(student.id);
+
+  document.getElementById('intro-view').style.display = 'none';
+  document.getElementById('done-view').style.display = '';
+  document.getElementById('done-greeting').textContent =
+    result.created
+      ? `${student.name} さん、登録完了！`
+      : `${student.name} さん、おかえりなさい！`;
+  document.getElementById('done-msg').innerHTML =
+    result.created
+      ? `${issued} 種類のクーポンをお届けしました 🎁`
+      : `すでに登録済みです。マイページからクーポンをご確認ください。`;
+
+  const base = location.href.replace(/\/[^/]*$/, '');
+  document.getElementById('goto-mypage').href =
+    base + '/student.html?u=' + student.token;
+});
+</script>
+</body>
+</html>

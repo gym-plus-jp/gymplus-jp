@@ -1,0 +1,546 @@
+/* Gym plus トランポリンパーク クーポンシステム - 共通スタイル */
+
+:root {
+  /* ブランドカラー: 3ロゴ（Jumpolin/Gym plus/AGC）すべて青系のためメインを青に */
+  --primary: #2196d8;          /* Jumpolin ブルー（メイン） */
+  --primary-dark: #1976b8;
+  --primary-soft: #e3f2fd;
+  --secondary: #0d3a5c;        /* Gym plus 深い青 */
+  --accent: #ff6b35;           /* サブ：オレンジ（重要アクション・キャッチー） */
+  --accent-dark: #e85a2a;
+  --accent-soft: #fef0e8;
+  --bg: #f7fafc;
+  --card: #ffffff;
+  --text: #0d3a5c;
+  --text-soft: #6b7280;
+  --border: #e5e7eb;
+  --success: #10b981;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --shadow: 0 4px 20px rgba(13, 58, 92, 0.08);
+  --shadow-lg: 0 12px 40px rgba(13, 58, 92, 0.14);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+
+.container-wide {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+
+/* ヘッダー */
+.app-header {
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--primary-dark) 100%);
+  color: #fff;
+  padding: 20px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2px 12px rgba(13, 58, 92, 0.18);
+}
+
+.app-header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-header h1 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header-logo {
+  height: 28px;
+  width: auto;
+  filter: brightness(0) invert(1);  /* 暗い背景に白で表示（青ロゴが透ける場合に備え） */
+  opacity: 0.95;
+}
+
+.app-footer {
+  text-align: center;
+  margin-top: 32px;
+  padding: 20px 16px;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.app-footer img {
+  height: 24px;
+  vertical-align: middle;
+  margin: 0 4px;
+}
+
+.app-header h1 .badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.app-header .nav-link {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.app-header .nav-link:hover {
+  color: #fff;
+}
+
+/* カード */
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title .icon {
+  font-size: 20px;
+}
+
+.card-subtitle {
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-bottom: 16px;
+}
+
+/* ボタン */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.2s, background 0.2s;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.btn:active { transform: scale(0.98); }
+.btn:hover { text-decoration: none; }
+
+/* メインボタン: ブランド青（ナビゲーション/汎用） */
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--primary-dark); }
+
+/* アクセントボタン: オレンジ（「受付で使う」「招待QRを発行する」など重要アクション） */
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-accent:hover { background: var(--accent-dark); }
+
+.btn-secondary {
+  background: var(--secondary);
+  color: #fff;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--text);
+}
+.btn-outline:hover { background: #f3f4f6; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-soft);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.btn-full { width: 100%; }
+.btn-sm { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
+.btn { white-space: nowrap; }
+
+/* 入力 */
+.form-group { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.form-input, .form-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  background: #fff;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.form-input:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(33, 150, 216, 0.12);
+}
+.form-help {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+/* バッジ */
+.badge-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.badge-available { background: #ecfdf5; color: #047857; }
+.badge-used { background: #f3f4f6; color: #6b7280; }
+.badge-expired { background: #fef3c7; color: #92400e; }
+.badge-referral { background: var(--accent-soft); color: var(--accent-dark); }
+
+/* クーポンカード（ブランド青ボーダー + サブのオレンジでアクション喚起） */
+.coupon {
+  background: linear-gradient(135deg, #fff 0%, var(--primary-soft) 100%);
+  border: 2px solid var(--primary);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.coupon.used {
+  background: #f9fafb;
+  border-color: var(--border);
+  opacity: 0.7;
+}
+
+.coupon-type {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.coupon.used .coupon-type { color: var(--text-soft); }
+
+.coupon-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--secondary);
+  margin-bottom: 4px;
+}
+
+.coupon-meta {
+  font-size: 12px;
+  color: var(--text-soft);
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.coupon-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+}
+
+/* QRコンテナ */
+.qr-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  background: #fff;
+  border: 1.5px dashed var(--border);
+  border-radius: 12px;
+  margin: 16px 0;
+}
+.qr-display img, .qr-display canvas {
+  border-radius: 8px;
+}
+.qr-display .qr-caption {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+#qr-reader {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+/* リスト */
+.student-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.student-row:last-child { border-bottom: none; }
+.student-row .name {
+  font-weight: 600;
+  font-size: 15px;
+}
+.student-row .meta {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.student-row .actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* タブ */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.tab {
+  flex: 1 0 auto;
+  padding: 10px 14px;
+  text-align: center;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-soft);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.tab.active {
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 1px 4px rgba(13, 58, 92, 0.08);
+}
+
+/* スキャン結果 */
+.scan-result {
+  padding: 24px;
+  border-radius: 12px;
+  text-align: center;
+  margin-top: 16px;
+}
+.scan-result.ok {
+  background: #ecfdf5;
+  border: 2px solid var(--success);
+}
+.scan-result.ng {
+  background: #fef2f2;
+  border: 2px solid var(--danger);
+}
+.scan-result.warn {
+  background: #fffbeb;
+  border: 2px solid var(--warn);
+}
+.scan-result .big-icon {
+  font-size: 64px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.scan-result .big-title {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.scan-result .detail {
+  font-size: 14px;
+  color: var(--text-soft);
+  margin-bottom: 12px;
+}
+
+/* 統計カード */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--card);
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.stat-card .label {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-bottom: 4px;
+}
+.stat-card .value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--secondary);
+}
+
+/* テーブル */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th, .table td {
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.table th {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.table .url-cell {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-soft);
+  word-break: break-all;
+}
+
+/* トースト */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--secondary);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 100;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ランディング */
+.landing-hero {
+  text-align: center;
+  padding: 60px 16px 40px;
+}
+.landing-hero .logo {
+  font-size: 56px;
+  margin-bottom: 12px;
+}
+.landing-hero h1 {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--secondary);
+  line-height: 1.3;
+}
+.landing-hero h1 .accent {
+  color: var(--primary);
+}
+.landing-hero .tagline {
+  color: var(--text-soft);
+  font-size: 15px;
+  margin-bottom: 32px;
+}
+.landing-actions {
+  display: grid;
+  gap: 12px;
+  max-width: 380px;
+  margin: 0 auto;
+}
+.landing-actions .btn {
+  padding: 18px;
+  font-size: 16px;
+}
+
+/* 空状態 */
+.empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-soft);
+}
+.empty .icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+  opacity: 0.4;
+}
+
+/* モバイル調整 */
+@media (max-width: 480px) {
+  .container, .container-wide { padding: 16px 12px 80px; }
+  .card { padding: 18px; }
+  .app-header h1 { font-size: 16px; }
+  .coupon-title { font-size: 18px; }
+  .table th, .table td { padding: 8px 4px; font-size: 12px; }
+}
+
+/* 印刷用 */
+@media print {
+  .app-header, .no-print { display: none; }
+  .card { box-shadow: none; border: 1px solid #ddd; page-break-inside: avoid; }
+  body { background: #fff; }
+}
