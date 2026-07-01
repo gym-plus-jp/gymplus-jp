@@ -113,6 +113,8 @@
 
 <div id="toast"></div>
 
+<script src="assets/config.js"></script>
+<script src="assets/db-supabase.js"></script>
 <script src="assets/db.js"></script>
 <script>
 function toast(msg) {
@@ -122,7 +124,7 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-document.getElementById('join-form').addEventListener('submit', e => {
+document.getElementById('join-form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
   const name = f.name.value.trim();
@@ -132,15 +134,19 @@ document.getElementById('join-form').addEventListener('submit', e => {
     toast('電話下4桁は数字4桁で入力してください');
     return;
   }
-  const result = DB.upsertStudent({ name, club, phoneLast4 });
+  const submitBtn = f.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = '登録中…';
+
+  const result = await DB.upsertStudent({ name, club, phoneLast4 });
   const student = result.student;
 
   // 既存・新規どちらでも、有効なキャンペーンを自動配布（重複は無視される）
-  const issued = DB.issueActiveCampaignsToStudent(student.id);
+  const issued = await DB.issueActiveCampaignsToStudent(student.id);
 
   // この端末を認証済みにしておく
   localStorage.setItem('gymplus_verified_' + student.id, '1');
-  DB.markStudentVerified(student.id);
+  await DB.markStudentVerified(student.id);
 
   document.getElementById('intro-view').style.display = 'none';
   document.getElementById('done-view').style.display = '';

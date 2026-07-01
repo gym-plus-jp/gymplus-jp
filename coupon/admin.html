@@ -226,6 +226,8 @@
 
 <div id="toast"></div>
 
+<script src="assets/config.js"></script>
+<script src="assets/db-supabase.js"></script>
 <script src="assets/db.js"></script>
 <script>
 function toast(msg) {
@@ -246,22 +248,23 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // 統計
-function renderStats() {
-  const db = DB.load();
-  const totalUsed = db.coupons.filter(c => c.usedAt).length;
-  const totalIssued = db.coupons.length;
-  const referralsUsed = db.referralQrs.filter(r => r.usedAt).length;
+async function renderStats() {
+  const [students, coupons, refs] = await Promise.all([
+    DB.getStudents(), DB.getAllCoupons(), DB.getAllReferralQrs()
+  ]);
+  const totalUsed = coupons.filter(c => c.usedAt).length;
+  const referralsUsed = refs.filter(r => r.usedAt).length;
   document.getElementById('stats').innerHTML = `
-    <div class="stat-card"><div class="label">登録生徒</div><div class="value">${db.students.length}</div></div>
-    <div class="stat-card"><div class="label">発行クーポン</div><div class="value">${totalIssued}</div></div>
+    <div class="stat-card"><div class="label">登録生徒</div><div class="value">${students.length}</div></div>
+    <div class="stat-card"><div class="label">発行クーポン</div><div class="value">${coupons.length}</div></div>
     <div class="stat-card"><div class="label">使用済み</div><div class="value">${totalUsed}</div></div>
     <div class="stat-card"><div class="label">友達紹介成立</div><div class="value">${referralsUsed}</div></div>
   `;
 }
 
 // 生徒一覧
-function renderStudents() {
-  const students = DB.getStudents();
+async function renderStudents() {
+  const students = await DB.getStudents();
   const el = document.getElementById('students-list');
   if (students.length === 0) {
     el.innerHTML = `<div class="empty">
@@ -271,8 +274,8 @@ function renderStudents() {
     </div>`;
     return;
   }
-  el.innerHTML = students.map(s => {
-    const coupons = DB.getCouponsForStudent(s.id);
+  const rows = await Promise.all(students.map(async s => {
+    const coupons = await DB.getCouponsForStudent(s.id);
     const usedCount = coupons.filter(c => c.usedAt).length;
     return `
       <div class="student-row">
@@ -286,7 +289,8 @@ function renderStudents() {
         </div>
       </div>
     `;
-  }).join('');
+  }));
+  el.innerHTML = rows.join('');
 }
 
 function studentMyPageUrl(token) {
@@ -294,8 +298,8 @@ function studentMyPageUrl(token) {
   return base + '/student.html?u=' + token;
 }
 
-function showStudentDetail(studentId) {
-  const s = DB.getStudentById(studentId);
+async function showStudentDetail(studentId) {
+  const s = await DB.getStudentById(studentId);
   if (!s) return;
   const url = studentMyPageUrl(s.token);
   const body = document.getElementById('student-detail-body');
@@ -327,17 +331,18 @@ function closeStudentDetail() {
   document.getElementById('student-detail-modal').style.display = 'none';
 }
 
-function deleteStudent(id) {
+async function deleteStudent(id) {
   if (!confirm('この生徒と関連クーポンを削除します。よろしいですか？')) return;
-  DB.deleteStudent(id);
+  await DB.deleteStudent(id);
   toast('削除しました');
   renderAll();
 }
 
 // 履歴
-function renderHistory() {
-  const db = DB.load();
-  const rows = [...db.redemptions].sort((a,b)=>b.at.localeCompare(a.at));
+async function renderHistory() {
+  const [rows, allCoupons, allRefs, allStudents] = await Promise.all([
+    DB.getRedemptions(), DB.getAllCoupons(), DB.getAllReferralQrs(), DB.getStudents()
+  ]);
   const el = document.getElementById('history-list');
   if (rows.length === 0) {
     el.innerHTML = `<div class="empty"><div class="icon">📭</div><p>まだ使用履歴はありません</p></div>`;
@@ -350,11 +355,11 @@ function renderHistory() {
         ${rows.map(r => {
           const isCoupon = r.kind === 'coupon';
           const target = isCoupon
-            ? (db.coupons.find(c => c.id === r.refId)?.label || '(削除済)')
-            : '招待QR：' + (db.referralQrs.find(x => x.id === r.refId)?.usedByName || '');
+            ? (allCoupons.find(c => c.id === r.refId)?.label || '(削除済)')
+            : '招待QR：' + (allRefs.find(x => x.id === r.refId)?.usedByName || '');
           const owner = isCoupon
-            ? (db.students.find(s => s.id === db.coupons.find(c => c.id === r.refId)?.studentId)?.name || '')
-            : (db.students.find(s => s.id === db.referralQrs.find(x => x.id === r.refId)?.issuerStudentId)?.name + ' さん紹介');
+            ? (allStudents.find(s => s.id === allCoupons.find(c => c.id === r.refId)?.studentId)?.name || '')
+            : ((allStudents.find(s => s.id === allRefs.find(x => x.id === r.refId)?.issuerStudentId)?.name || '') + ' さん紹介');
           return `<tr>
             <td>${new Date(r.at).toLocaleString('ja-JP')}</td>
             <td>${isCoupon ? '🎫 クーポン' : '👯 紹介'}</td>
@@ -368,18 +373,18 @@ function renderHistory() {
 }
 
 // 設定読込/保存
-function loadSettings() {
-  const s = DB.getSettings();
+async function loadSettings() {
+  const s = await DB.getSettings();
   const f = document.getElementById('settings-form');
   f.referralLimitPerMonth.value = s.referralLimitPerMonth;
   f.referralExpireDays.value = s.referralExpireDays;
   f.referrerRewardLabel.value = s.referrerRewardLabel;
 }
 
-document.getElementById('settings-form').addEventListener('submit', e => {
+document.getElementById('settings-form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
-  DB.updateSettings({
+  await DB.updateSettings({
     referralLimitPerMonth: parseInt(f.referralLimitPerMonth.value, 10),
     referralExpireDays: parseInt(f.referralExpireDays.value, 10),
     referrerRewardLabel: f.referrerRewardLabel.value,
@@ -388,26 +393,28 @@ document.getElementById('settings-form').addEventListener('submit', e => {
 });
 
 // 生徒登録
-document.getElementById('register-form').addEventListener('submit', e => {
+document.getElementById('register-form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
-  const s = DB.addStudent({
+  const s = await DB.addStudent({
     name: f.name.value.trim(),
     club: f.club.value,
     phoneLast4: f.phoneLast4.value.trim(),
   });
+  // 新規登録した生徒に、有効なキャンペーンを自動配布
+  await DB.issueActiveCampaignsToStudent(s.id);
   f.reset();
   toast(`${s.name} さんを登録しました`);
-  renderAll();
+  await renderAll();
   document.querySelector('[data-tab="students"]').click();
   showStudentDetail(s.id);
 });
 
 // クーポン発行
-document.getElementById('coupon-form').addEventListener('submit', e => {
+document.getElementById('coupon-form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
-  const n = DB.issueCouponToAll({
+  const n = await DB.issueCouponToAll({
     type: f.type.value,
     label: f.label.value.trim(),
     detail: f.detail.value.trim(),
@@ -418,8 +425,8 @@ document.getElementById('coupon-form').addEventListener('submit', e => {
   renderAll();
 });
 
-function seedDemo() {
-  const ok = DB.seedDemoData();
+async function seedDemo() {
+  const ok = await DB.seedDemoData();
   if (ok) {
     toast('デモデータを投入しました');
     renderAll();
@@ -428,9 +435,9 @@ function seedDemo() {
   }
 }
 
-function confirmReset() {
+async function confirmReset() {
   if (!confirm('全データを削除して初期状態に戻します。よろしいですか？')) return;
-  DB.resetAll();
+  await DB.resetAll();
   toast('リセットしました');
   renderAll();
   loadSettings();
@@ -496,10 +503,8 @@ function resetLineText() {
   toast('雛形に戻しました');
 }
 
-function renderAll() {
-  renderStats();
-  renderStudents();
-  renderHistory();
+async function renderAll() {
+  await Promise.all([renderStats(), renderStudents(), renderHistory()]);
   renderLineKit();
 }
 

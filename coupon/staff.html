@@ -81,6 +81,8 @@
 
 <div id="toast"></div>
 
+<script src="assets/config.js"></script>
+<script src="assets/db-supabase.js"></script>
 <script src="assets/db.js"></script>
 <script>
 function toast(msg) {
@@ -130,11 +132,11 @@ function onScanSuccess(decodedText) {
   processScan(decodedText);
 }
 
-function processScan(text) {
+async function processScan(text) {
   if (text.startsWith('cp:')) {
-    const c = DB.getCouponByToken(text.slice(3));
+    const c = await DB.getCouponByToken(text.slice(3));
     if (!c) return showResult({ ok:false, big:'❓', title:'不明なQR', detail:'登録されていないクーポンです' });
-    const student = DB.getStudentById(c.studentId);
+    const student = await DB.getStudentById(c.studentId);
     if (c.usedAt) return showResult({ ok:false, big:'❌', title:'使用済み',
       detail:`このクーポンは ${new Date(c.usedAt).toLocaleString('ja-JP')} に使用済みです`,
       sub:`${student?.name || ''} さん / ${c.label}`});
@@ -144,7 +146,7 @@ function processScan(text) {
         sub:`${student?.name || ''} さん / ${c.label}`});
     showCouponConfirm(c, student);
   } else if (text.startsWith('rf:')) {
-    const r = DB.getReferralByToken(text.slice(3));
+    const r = await DB.getReferralByToken(text.slice(3));
     if (!r) return showResult({ ok:false, big:'❓', title:'不明なQR', detail:'登録されていない招待QRです' });
     if (r.usedAt) return showResult({ ok:false, big:'❌', title:'使用済み',
       detail:`この招待QRは ${new Date(r.usedAt).toLocaleString('ja-JP')} に使用済み（${r.usedByName}さん）`,
@@ -186,8 +188,8 @@ function showCouponConfirm(c, student) {
   area.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function confirmRedeemCoupon(couponId) {
-  const r = DB.redeemCoupon(couponId, '受付');
+async function confirmRedeemCoupon(couponId) {
+  const r = await DB.redeemCoupon(couponId, '受付');
   if (!r.ok) {
     showResult({ ok:false, big:'❌', title:'処理失敗', detail: r.reason });
     return;
@@ -199,19 +201,22 @@ function confirmRedeemCoupon(couponId) {
   });
 }
 
-function confirmFriend() {
+async function confirmFriend() {
   const name = document.getElementById('friend-name').value.trim() || '（記名なし）';
-  const r = DB.redeemReferralQr(pendingReferral.id, name, '受付');
+  const r = await DB.redeemReferralQr(pendingReferral.id, name, '受付');
   closeFriendModal();
   if (!r.ok) {
     showResult({ ok:false, big:'❌', title:'処理失敗', detail: r.reason });
     return;
   }
-  const issuer = DB.getStudentById(r.referral.issuerStudentId);
+  const [issuer, settings] = await Promise.all([
+    DB.getStudentById(r.referral.issuerStudentId),
+    DB.getSettings(),
+  ]);
   showResult({
     ok:true, big:'✅', title:'招待QR 適用',
     detail:`${name} さんに割引を適用しました`,
-    sub:`紹介者：${issuer?.name || ''} さんに「${DB.getSettings().referrerRewardLabel}」を付与`,
+    sub:`紹介者：${issuer?.name || ''} さんに「${settings.referrerRewardLabel}」を付与`,
   });
   pendingReferral = null;
 }

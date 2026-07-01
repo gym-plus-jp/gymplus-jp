@@ -120,6 +120,8 @@
 
 <div id="toast"></div>
 
+<script src="assets/config.js"></script>
+<script src="assets/db-supabase.js"></script>
 <script src="assets/db.js"></script>
 <script>
 function toast(msg) {
@@ -136,35 +138,36 @@ const params = new URLSearchParams(location.search);
 const token = params.get('u');
 let student = null;
 
-if (!token) {
-  show('error-view');
-  document.getElementById('error-title').textContent = 'URLが不正です';
-  document.getElementById('error-msg').textContent =
-    'マイページにはご自分の固有URLからアクセスしてください。管理画面で発行された URL（?u=... を含むもの）を開いてください。';
-} else {
-  student = DB.getStudentByToken(token);
+(async () => {
+  if (!token) {
+    show('error-view');
+    document.getElementById('error-title').textContent = 'URLが不正です';
+    document.getElementById('error-msg').textContent =
+      'マイページにはご自分の固有URLからアクセスしてください。管理画面で発行された URL（?u=... を含むもの）を開いてください。';
+    return;
+  }
+  student = await DB.getStudentByToken(token);
   if (!student) {
     show('error-view');
     document.getElementById('error-title').textContent = '生徒情報が見つかりません';
     document.getElementById('error-msg').textContent =
       'URLが古いか、登録が解除されている可能性があります。管理者にお問い合わせください。';
-  } else {
-    // 端末認証
-    const key = 'gymplus_verified_' + student.id;
-    if (localStorage.getItem(key) === '1') {
-      initMain();
-    } else {
-      show('auth-view');
-    }
+    return;
   }
-}
+  const key = 'gymplus_verified_' + student.id;
+  if (localStorage.getItem(key) === '1') {
+    initMain();
+  } else {
+    show('auth-view');
+  }
+})();
 
-document.getElementById('auth-form')?.addEventListener('submit', e => {
+document.getElementById('auth-form')?.addEventListener('submit', async e => {
   e.preventDefault();
   const input = document.getElementById('auth-phone').value.trim();
   if (input === student.phoneLast4) {
     localStorage.setItem('gymplus_verified_' + student.id, '1');
-    DB.markStudentVerified(student.id);
+    await DB.markStudentVerified(student.id);
     hide('auth-view');
     initMain();
   } else {
@@ -172,12 +175,12 @@ document.getElementById('auth-form')?.addEventListener('submit', e => {
   }
 });
 
-function initMain() {
+async function initMain() {
   show('main-view');
   document.getElementById('welcome-name').textContent = student.name + ' さん';
   document.getElementById('welcome-club').textContent = student.club;
-  document.getElementById('reward-label-hint').textContent =
-    DB.getSettings().referrerRewardLabel;
+  const settings = await DB.getSettings();
+  document.getElementById('reward-label-hint').textContent = settings.referrerRewardLabel;
   renderCoupons();
   renderInvite();
 }
@@ -200,8 +203,8 @@ function couponStatusBadge(c) {
   return '<span class="badge-status badge-available">利用可</span>';
 }
 
-function renderCoupons() {
-  const coupons = DB.getCouponsForStudent(student.id);
+async function renderCoupons() {
+  const coupons = await DB.getCouponsForStudent(student.id);
   const el = document.getElementById('coupons-list');
   if (coupons.length === 0) {
     el.innerHTML = `<div class="card empty">
@@ -237,8 +240,9 @@ function renderCoupons() {
   `).join('');
 }
 
-function showCouponQr(couponId) {
-  const c = DB.getCouponsForStudent(student.id).find(x => x.id === couponId);
+async function showCouponQr(couponId) {
+  const list = await DB.getCouponsForStudent(student.id);
+  const c = list.find(x => x.id === couponId);
   if (!c) return;
   const payload = 'cp:' + c.token;
   const body = document.getElementById('coupon-modal-body');
@@ -266,9 +270,12 @@ function closeCouponModal() {
   renderCoupons();
 }
 
-function renderInvite() {
-  const settings = DB.getSettings();
-  const issued = DB.countReferralIssuedThisMonth(student.id);
+async function renderInvite() {
+  const [settings, issued, allRaw] = await Promise.all([
+    DB.getSettings(),
+    DB.countReferralIssuedThisMonth(student.id),
+    DB.getReferralQrsForStudent(student.id),
+  ]);
   const remaining = Math.max(0, settings.referralLimitPerMonth - issued);
   document.getElementById('invite-quota').innerHTML = `
     今月の発行可能枚数：<strong>${remaining} / ${settings.referralLimitPerMonth}</strong>
@@ -279,8 +286,7 @@ function renderInvite() {
   btn.style.opacity = remaining === 0 ? 0.5 : 1;
   if (remaining === 0) btn.textContent = '今月の上限に達しました';
 
-  const all = DB.getReferralQrsForStudent(student.id)
-    .sort((a,b) => b.issuedAt.localeCompare(a.issuedAt));
+  const all = [...allRaw].sort((a,b) => b.issuedAt.localeCompare(a.issuedAt));
   const el = document.getElementById('invite-list');
   if (all.length === 0) {
     el.innerHTML = `<div class="empty" style="padding:20px;">
@@ -310,20 +316,24 @@ function renderInvite() {
     }).join('');
 }
 
-document.getElementById('issue-referral-btn').addEventListener('click', () => {
-  const result = DB.issueReferralQr(student.id);
+document.getElementById('issue-referral-btn').addEventListener('click', async () => {
+  const result = await DB.issueReferralQr(student.id);
   if (!result.ok) {
     if (result.reason === 'monthly_limit') toast('今月の発行上限に達しました');
     else toast('発行に失敗しました');
     return;
   }
   toast('招待QRを発行しました');
-  renderInvite();
+  await renderInvite();
   showInviteQr(result.referral.id);
 });
 
-function showInviteQr(referralId) {
-  const r = DB.getReferralQrsForStudent(student.id).find(x => x.id === referralId);
+async function showInviteQr(referralId) {
+  const [list, settings] = await Promise.all([
+    DB.getReferralQrsForStudent(student.id),
+    DB.getSettings(),
+  ]);
+  const r = list.find(x => x.id === referralId);
   if (!r) return;
   const payload = 'rf:' + r.token;
   const body = document.getElementById('invite-modal-body');
@@ -344,7 +354,7 @@ function showInviteQr(referralId) {
       📝 <strong>使い方</strong><br>
       ① 友達が Jumpolin に来店<br>
       ② 受付でこのQRを提示<br>
-      ③ 友達は割引適用、あなたには「<strong>${DB.getSettings().referrerRewardLabel}</strong>」が届きます
+      ③ 友達は割引適用、あなたには「<strong>${settings.referrerRewardLabel}</strong>」が届きます
     </div>
   `;
   document.getElementById('invite-modal').style.display = 'block';

@@ -242,6 +242,19 @@
     return { ok: true, referral: toCamel(updated), reward: toCamel(friendlyCoupon) };
   }
 
+  // ===== Aggregate =====
+  async function getAllCoupons() {
+    return (await _select('coupons', 'order=issued_at.desc')).map(toCamel);
+  }
+  async function getAllReferralQrs() {
+    return (await _select('referral_qrs', 'order=issued_at.desc')).map(toCamel);
+  }
+  async function getRedemptions() {
+    return (await _select('redemptions', 'order=at.desc')).map(r => ({
+      id: r.id, kind: r.kind, refId: r.ref_id, at: r.at, by: r.redeemed_by
+    }));
+  }
+
   // ===== Settings =====
   async function getSettings() {
     const rows = await _select('settings');
@@ -319,6 +332,7 @@
     getCouponByToken, redeemCoupon,
     getReferralQrsForStudent, issueReferralQr, getReferralByToken,
     redeemReferralQr, countReferralIssuedThisMonth,
+    getAllCoupons, getAllReferralQrs, getRedemptions,
     getSettings, updateSettings,
     resetAll, seedDemoData,
   };
