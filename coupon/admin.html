@@ -28,6 +28,7 @@
     <div class="tab" data-tab="line">💬 LINE配布キット</div>
     <div class="tab" data-tab="register">➕ 生徒登録</div>
     <div class="tab" data-tab="coupons">🎫 クーポン発行</div>
+    <div class="tab" data-tab="allcoupons">📋 全クーポン一覧</div>
     <div class="tab" data-tab="history">📊 使用履歴</div>
     <div class="tab" data-tab="settings">⚙️ 設定</div>
   </div>
@@ -171,6 +172,27 @@
     </div>
   </div>
 
+  <!-- 全クーポン一覧 -->
+  <div class="tab-panel" id="panel-allcoupons" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">📋</span>
+        <span>全クーポン一覧</span>
+      </div>
+      <p class="card-subtitle">
+        発行済みの全クーポンを表示します。誰にどのクーポンが渡っていて、使われたか未使用かが一目で分かります。
+      </p>
+      <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="filterAllCoupons('all')">すべて</button>
+        <button class="btn btn-outline btn-sm" onclick="filterAllCoupons('available')">利用可</button>
+        <button class="btn btn-outline btn-sm" onclick="filterAllCoupons('used')">使用済み</button>
+        <button class="btn btn-outline btn-sm" onclick="filterAllCoupons('expired')">期限切れ</button>
+      </div>
+      <div id="allcoupons-stats" style="font-size:13px; color:var(--text-soft); margin-bottom:12px;"></div>
+      <div id="allcoupons-list"></div>
+    </div>
+  </div>
+
   <!-- 使用履歴 -->
   <div class="tab-panel" id="panel-history" style="display:none">
     <div class="card">
@@ -285,6 +307,7 @@ async function renderStudents() {
         </div>
         <div class="actions">
           <button class="btn btn-primary btn-sm" onclick="showStudentDetail('${s.id}')">URL/QR</button>
+          <a class="btn btn-outline btn-sm" href="student.html?u=${s.token}&preview=1" target="_blank">👁 プレビュー</a>
           <button class="btn btn-outline btn-sm" onclick="deleteStudent('${s.id}')">削除</button>
         </div>
       </div>
@@ -503,8 +526,79 @@ function resetLineText() {
   toast('雛形に戻しました');
 }
 
+// ===== 全クーポン一覧 =====
+let allCouponsFilter = 'all';
+
+function filterAllCoupons(mode) {
+  allCouponsFilter = mode;
+  renderAllCoupons();
+}
+
+async function renderAllCoupons() {
+  const [coupons, students] = await Promise.all([
+    DB.getAllCoupons(), DB.getStudents()
+  ]);
+  const studentMap = Object.fromEntries(students.map(s => [s.id, s]));
+  const now = new Date();
+
+  const enriched = coupons.map(c => {
+    const status = c.usedAt ? 'used'
+                : (c.expiresAt && new Date(c.expiresAt) < now) ? 'expired'
+                : 'available';
+    return { ...c, status, studentName: studentMap[c.studentId]?.name || '(削除済み)' };
+  }).sort((a,b) => (b.issuedAt || '').localeCompare(a.issuedAt || ''));
+
+  const filtered = allCouponsFilter === 'all' ? enriched
+                 : enriched.filter(c => c.status === allCouponsFilter);
+
+  // 統計
+  const counts = {
+    all: enriched.length,
+    available: enriched.filter(c => c.status === 'available').length,
+    used: enriched.filter(c => c.status === 'used').length,
+    expired: enriched.filter(c => c.status === 'expired').length,
+  };
+  document.getElementById('allcoupons-stats').innerHTML =
+    `全 <strong>${counts.all}</strong>件 / 利用可 <strong>${counts.available}</strong>件 / 使用済 <strong>${counts.used}</strong>件 / 期限切れ <strong>${counts.expired}</strong>件`;
+
+  const el = document.getElementById('allcoupons-list');
+  if (filtered.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="icon">📭</div><p>該当するクーポンはありません</p></div>`;
+    return;
+  }
+
+  const statusBadge = (s) => {
+    if (s === 'used')      return '<span class="badge-status badge-used">使用済み</span>';
+    if (s === 'expired')   return '<span class="badge-status badge-expired">期限切れ</span>';
+    return '<span class="badge-status badge-available">利用可</span>';
+  };
+
+  el.innerHTML = `
+    <table class="table">
+      <thead>
+        <tr><th>状態</th><th>会員</th><th>クーポン</th><th>発行日</th><th>期限</th><th>使用日</th></tr>
+      </thead>
+      <tbody>
+        ${filtered.map(c => `
+          <tr>
+            <td>${statusBadge(c.status)}</td>
+            <td><strong>${c.studentName}</strong></td>
+            <td>
+              <div style="font-weight:600;">${c.label}</div>
+              <div class="meta" style="font-size:11px; color:var(--text-soft);">${c.type}${c.detail ? '・' + c.detail : ''}</div>
+            </td>
+            <td style="font-size:12px;">${c.issuedAt ? new Date(c.issuedAt).toLocaleDateString('ja-JP') : '-'}</td>
+            <td style="font-size:12px;">${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('ja-JP') : '-'}</td>
+            <td style="font-size:12px;">${c.usedAt ? new Date(c.usedAt).toLocaleString('ja-JP') : '-'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
 async function renderAll() {
-  await Promise.all([renderStats(), renderStudents(), renderHistory()]);
+  await Promise.all([renderStats(), renderStudents(), renderHistory(), renderAllCoupons()]);
   renderLineKit();
 }
 

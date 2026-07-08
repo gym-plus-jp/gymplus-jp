@@ -136,6 +136,7 @@ function hide(id) { document.getElementById(id).style.display = 'none'; }
 
 const params = new URLSearchParams(location.search);
 const token = params.get('u');
+const isAdminPreview = params.get('preview') === '1';  // ★ 管理者プレビューモード
 let student = null;
 
 (async () => {
@@ -154,6 +155,12 @@ let student = null;
       'URLが古いか、登録が解除されている可能性があります。管理者にお問い合わせください。';
     return;
   }
+  // ★ 管理者プレビュー：認証スキップ + 上部バナー表示
+  if (isAdminPreview) {
+    showAdminPreviewBanner();
+    initMain();
+    return;
+  }
   const key = 'gymplus_verified_' + student.id;
   if (localStorage.getItem(key) === '1') {
     initMain();
@@ -161,6 +168,13 @@ let student = null;
     show('auth-view');
   }
 })();
+
+function showAdminPreviewBanner() {
+  const banner = document.createElement('div');
+  banner.style.cssText = 'position:sticky; top:0; z-index:1000; background:linear-gradient(135deg,#ff6b35,#e85a2a); color:#fff; padding:10px 16px; text-align:center; font-size:13px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.15);';
+  banner.innerHTML = '👁 <strong>管理者プレビュー</strong>：' + student.name + ' さんのマイページを閲覧中（本人による操作ではありません） <a href="admin.html" style="color:#fff; text-decoration:underline; margin-left:8px;">← 管理画面に戻る</a>';
+  document.body.insertBefore(banner, document.body.firstChild);
+}
 
 document.getElementById('auth-form')?.addEventListener('submit', async e => {
   e.preventDefault();
