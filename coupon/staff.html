@@ -132,6 +132,15 @@ function onScanSuccess(decodedText) {
   processScan(decodedText);
 }
 
+// 併用不可判定：同じ会員が直近30分以内に他クーポンを使用していたら true
+async function hasRecentUsage(studentId, thisCouponId) {
+  const list = await DB.getCouponsForStudent(studentId);
+  const now = new Date();
+  const window30min = 30 * 60 * 1000;
+  return list.find(x => x.id !== thisCouponId && x.usedAt &&
+                        (now - new Date(x.usedAt)) < window30min);
+}
+
 async function processScan(text) {
   if (text.startsWith('cp:')) {
     const c = await DB.getCouponByToken(text.slice(3));
@@ -144,6 +153,14 @@ async function processScan(text) {
       return showResult({ ok:false, warn:true, big:'⏰', title:'期限切れ',
         detail:`有効期限：${new Date(c.expiresAt).toLocaleDateString('ja-JP')}`,
         sub:`${student?.name || ''} さん / ${c.label}`});
+    // ★ 併用不可チェック
+    const recentUsed = await hasRecentUsage(c.studentId, c.id);
+    if (recentUsed) {
+      return showResult({ ok:false, warn:true, big:'⚠️', title:'併用不可',
+        detail:`${student?.name || ''} さんは${Math.round((new Date() - new Date(recentUsed.usedAt))/60000)}分前に別のクーポン「${recentUsed.label}」を使用済みです`,
+        sub:`他のクーポンとの併用はできません`,
+        overrideCouponId: c.id});
+    }
     showCouponConfirm(c, student);
   } else if (text.startsWith('rf:')) {
     const r = await DB.getReferralByToken(text.slice(3));
@@ -226,7 +243,7 @@ function closeFriendModal() {
   pendingReferral = null;
 }
 
-function showResult({ ok, warn, big, title, detail, sub }) {
+function showResult({ ok, warn, big, title, detail, sub, overrideCouponId }) {
   const cls = ok ? 'ok' : (warn ? 'warn' : 'ng');
   const area = document.getElementById('result-area');
   area.innerHTML = `
@@ -235,10 +252,24 @@ function showResult({ ok, warn, big, title, detail, sub }) {
       <div class="big-title">${title}</div>
       <div class="detail">${detail || ''}</div>
       ${sub ? `<div style="font-size:12px; color:var(--text-soft); margin-bottom:12px;">${sub}</div>` : ''}
-      <button class="btn btn-outline btn-sm" onclick="clearResult()">続けて読み取る</button>
+      ${overrideCouponId ? `
+        <div style="background:#fff3cd; border:1px solid #ffe69c; padding:12px; border-radius:8px; margin-bottom:12px; font-size:12px; text-align:left;">
+          <strong>⚠️ 管理者判断で使用する場合</strong><br>
+          例外的に併用を許可する場合のみ、下のボタンを押してください（通常は「通常料金でご案内」推奨）。
+        </div>
+        <div style="display:flex; gap:8px; justify-content:center;">
+          <button class="btn btn-outline btn-sm" onclick="clearResult()">通常料金でご案内</button>
+          <button class="btn btn-primary btn-sm" onclick="overrideAndRedeem('${overrideCouponId}')">それでも使用する</button>
+        </div>
+      ` : `<button class="btn btn-outline btn-sm" onclick="clearResult()">続けて読み取る</button>`}
     </div>
   `;
   area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function overrideAndRedeem(couponId) {
+  const c = await DB.getCouponByToken((await DB.getAllCoupons()).find(x => x.id === couponId)?.token);
+  if (c) confirmRedeemCoupon(couponId);
 }
 
 function clearResult() {
