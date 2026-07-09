@@ -242,12 +242,12 @@
     ];
     for (const d of demos) await addStudent(d);
     await issueCouponToAll({
-      type: '誕生月特典', label: '6月生まれ特典:入場料20%OFF',
+      type: '誕生月特典', label: '6月生まれ特典:利用料20%OFF',
       detail: '誕生月の方限定。1回のみ利用可', expiresAt: '2026-06-30T23:59:59',
     });
     await issueCouponToAll({
       type: '割引券', label: '夏休み先取りキャンペーン:500円OFF',
-      detail: '通常入場料から500円引き', expiresAt: '2026-07-31T23:59:59',
+      detail: '通常利用料から500円引き', expiresAt: '2026-07-31T23:59:59',
     });
     await issueCouponToAll({
       type: 'オマケ', label: '初夏のドリンクサービス',
