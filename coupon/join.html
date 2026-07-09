@@ -109,10 +109,22 @@
       <div style="font-size: 56px;">🎉</div>
       <h2 style="font-size: 22px; margin: 8px 0;" id="done-greeting"></h2>
       <p style="color: var(--text-soft); font-size: 14px;" id="done-msg"></p>
-      <div style="margin: 24px 0;">
+
+      <!-- 登録済み会員リスト（複数人の場合表示） -->
+      <div id="registered-list" style="display:none; margin: 16px 0; padding: 12px 16px; background: #f7fafc; border-radius: 10px; text-align: left; font-size: 13px;">
+        <div style="font-weight: 700; color: var(--brand-deep, #0d3a5c); margin-bottom: 6px;">
+          👨‍👩‍👧 登録済みのお子様
+        </div>
+        <div id="registered-list-items" style="line-height: 1.85;"></div>
+      </div>
+
+      <div style="margin: 24px 0; display: flex; flex-direction: column; gap: 10px;">
         <a id="goto-mypage" class="btn btn-primary btn-full" href="#">
           🎫 マイクーポンを見る
         </a>
+        <button type="button" class="btn btn-outline btn-full" onclick="showSiblingForm()">
+          👨‍👩‍👧 続けてご兄弟を登録する
+        </button>
       </div>
       <div style="background:var(--primary-soft); padding:14px; border-radius:10px;
            font-size:12px; line-height:1.7; text-align:left;">
@@ -120,6 +132,43 @@
         LINEのお友達にも自分のページのURLは<strong>共有しないでください</strong>
         （流用防止のため、Jumpolin来店時はQR提示・1回のみ有効です）。
       </div>
+    </div>
+  </div>
+
+  <!-- 兄弟追加登録 -->
+  <div id="sibling-view" style="display:none;">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">👨‍👩‍👧</span>
+        <span>ご兄弟の登録</span>
+      </div>
+      <p style="font-size: 13px; color: var(--text-soft); margin-bottom: 16px;">
+        電話下4桁は同じでOK。ご兄弟の<strong>お名前と所属クラブ</strong>だけ入力してください（15秒で完了）。
+      </p>
+      <form id="sibling-form">
+        <div class="form-group">
+          <label class="form-label">ご兄弟のお名前</label>
+          <input class="form-input" name="name" required placeholder="例：佐藤 たろう" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">所属クラブ</label>
+          <select class="form-select" name="club" required>
+            <option value="">選択してください</option>
+            <option value="AGC">あしかが体操クラブ（AGC）</option>
+            <option value="Bullets">Bullets チア教室</option>
+            <option value="AGC+Bullets">AGC + Bullets 両方</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <div style="background: #e3f2fd; padding: 10px 12px; border-radius: 8px; font-size: 12px;">
+            📞 電話下4桁：<strong id="sibling-phone-display"></strong>（保護者様の番号を引き継ぎ）
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-outline btn-full" onclick="cancelSibling()">戻る</button>
+          <button type="submit" class="btn btn-primary btn-full">👨‍👩‍👧 このお子様を登録</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -143,6 +192,68 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2400);
 }
 
+// 保護者情報を保持（兄弟登録で使う）
+let currentPhoneLast4 = '';
+let registeredStudents = [];  // {name, club, token}
+
+function updateRegisteredList() {
+  if (registeredStudents.length <= 1) {
+    document.getElementById('registered-list').style.display = 'none';
+    return;
+  }
+  document.getElementById('registered-list').style.display = '';
+  const base = location.href.replace(/\/[^/]*$/, '');
+  document.getElementById('registered-list-items').innerHTML =
+    registeredStudents.map((s, i) => `
+      <div style="padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
+        <span>${i + 1}. <strong>${s.name}</strong>（${s.club}）</span>
+        <a href="${base}/student.html?u=${s.token}" style="font-size: 11px; color: var(--brand-mid, #1e6fcf);">マイページ →</a>
+      </div>
+    `).join('');
+}
+
+async function registerStudent(name, club, phoneLast4) {
+  const result = await DB.upsertStudent({ name, club, phoneLast4 });
+  const student = result.student;
+  const issued = await DB.issueActiveCampaignsToStudent(student.id);
+  localStorage.setItem('gymplus_verified_' + student.id, '1');
+  await DB.markStudentVerified(student.id);
+  return { student, created: result.created, issued };
+}
+
+function showDoneView({ student, created, issued }) {
+  document.getElementById('intro-view').style.display = 'none';
+  document.getElementById('sibling-view').style.display = 'none';
+  document.getElementById('done-view').style.display = '';
+  document.getElementById('done-greeting').textContent =
+    created
+      ? `${student.name} さん、登録完了！`
+      : `${student.name} さん、おかえりなさい！`;
+  document.getElementById('done-msg').innerHTML =
+    created
+      ? `${issued} 種類のクーポンをお届けしました 🎁`
+      : `すでに登録済みです。マイページからクーポンをご確認ください。`;
+  const base = location.href.replace(/\/[^/]*$/, '');
+  document.getElementById('goto-mypage').href =
+    base + '/student.html?u=' + student.token;
+  updateRegisteredList();
+}
+
+function showSiblingForm() {
+  document.getElementById('done-view').style.display = 'none';
+  document.getElementById('sibling-view').style.display = '';
+  document.getElementById('sibling-phone-display').textContent = currentPhoneLast4;
+  document.getElementById('sibling-form').reset();
+  setTimeout(() => document.querySelector('#sibling-form [name=name]').focus(), 100);
+  window.scrollTo(0, 0);
+}
+
+function cancelSibling() {
+  document.getElementById('sibling-view').style.display = 'none';
+  document.getElementById('done-view').style.display = '';
+}
+
+// 初回登録
 document.getElementById('join-form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
@@ -157,30 +268,36 @@ document.getElementById('join-form').addEventListener('submit', async e => {
   submitBtn.disabled = true;
   submitBtn.textContent = '登録中…';
 
-  const result = await DB.upsertStudent({ name, club, phoneLast4 });
-  const student = result.student;
+  const result = await registerStudent(name, club, phoneLast4);
+  currentPhoneLast4 = phoneLast4;
+  registeredStudents.push({ name: result.student.name, club: result.student.club, token: result.student.token });
+  showDoneView(result);
+});
 
-  // 既存・新規どちらでも、有効なキャンペーンを自動配布（重複は無視される）
-  const issued = await DB.issueActiveCampaignsToStudent(student.id);
+// 兄弟追加登録
+document.getElementById('sibling-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  const name = f.name.value.trim();
+  const club = f.club.value;
+  const submitBtn = f.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = '登録中…';
 
-  // この端末を認証済みにしておく
-  localStorage.setItem('gymplus_verified_' + student.id, '1');
-  await DB.markStudentVerified(student.id);
-
-  document.getElementById('intro-view').style.display = 'none';
-  document.getElementById('done-view').style.display = '';
-  document.getElementById('done-greeting').textContent =
-    result.created
-      ? `${student.name} さん、登録完了！`
-      : `${student.name} さん、おかえりなさい！`;
-  document.getElementById('done-msg').innerHTML =
-    result.created
-      ? `${issued} 種類のクーポンをお届けしました 🎁`
-      : `すでに登録済みです。マイページからクーポンをご確認ください。`;
-
-  const base = location.href.replace(/\/[^/]*$/, '');
-  document.getElementById('goto-mypage').href =
-    base + '/student.html?u=' + student.token;
+  try {
+    const result = await registerStudent(name, club, currentPhoneLast4);
+    // 既に登録済み会員でなければリストに追加
+    if (!registeredStudents.find(s => s.token === result.student.token)) {
+      registeredStudents.push({ name: result.student.name, club: result.student.club, token: result.student.token });
+    }
+    showDoneView(result);
+    toast(`${name} さん、登録完了！`);
+  } catch (err) {
+    console.error(err);
+    toast('登録に失敗しました');
+    submitBtn.disabled = false;
+    submitBtn.textContent = '👨‍👩‍👧 このお子様を登録';
+  }
 });
 </script>
 </body>
