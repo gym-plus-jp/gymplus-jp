@@ -99,20 +99,73 @@ let pendingReferral = null;
 document.getElementById('start-btn').addEventListener('click', startScan);
 document.getElementById('stop-btn').addEventListener('click', stopScan);
 
+function setScanning(active) {
+  document.getElementById('start-btn').disabled = active;
+  document.getElementById('stop-btn').disabled = !active;
+}
+
+function showCameraError(msg) {
+  const area = document.getElementById('result-area');
+  area.innerHTML = `
+    <div class="scan-result ng">
+      <div class="big-icon">📷</div>
+      <div class="big-title">カメラを起動できません</div>
+      <div class="detail" style="margin-bottom:12px;">${msg}</div>
+      <div style="background:#fff3cd; border:1px solid #ffe69c; padding:14px; border-radius:8px; font-size:12.5px; text-align:left; margin-bottom:14px; line-height:1.8;">
+        <strong>▼ 対処法（順番に試してください）</strong><br>
+        <strong>①</strong> ページを閉じて、Safari/Chromeで <strong>https://gymplus.jp/coupon/staff.html</strong> を開き直す<br>
+        <strong>②</strong> アドレスバー左の「あぁ」or「🔒」→ Webサイト設定 → <strong>カメラを「許可」</strong><br>
+        <strong>③</strong> iPhoneの場合：設定 → Safari → カメラ → 「許可」<br>
+        <strong>④</strong> それでもダメなら下の <strong>「⌨️ 手動入力（テスト用）」</strong> を使ってQRの中身を打つ
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="clearResult()">閉じる</button>
+    </div>
+  `;
+  area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function startScan() {
   if (!html5QrCode) html5QrCode = new Html5Qrcode('qr-reader');
+  const config = {
+    fps: 10,
+    qrbox: (w, h) => {
+      const min = Math.min(w, h);
+      const size = Math.floor(min * 0.75);
+      return { width: size, height: size };
+    },
+    aspectRatio: 1.0,
+  };
+
+  // 方法1: facingMode で背面カメラ
   try {
-    await html5QrCode.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      onScanSuccess,
-      () => {}
-    );
-    document.getElementById('start-btn').disabled = true;
-    document.getElementById('stop-btn').disabled = false;
-  } catch (err) {
-    toast('カメラ起動に失敗しました');
-    console.error(err);
+    await html5QrCode.start({ facingMode: { exact: 'environment' } }, config, onScanSuccess, () => {});
+    setScanning(true);
+    return;
+  } catch (err1) {
+    console.warn('exact:environment failed:', err1?.message || err1);
+  }
+  // 方法2: facingMode 'environment'（緩め）
+  try {
+    await html5QrCode.start({ facingMode: 'environment' }, config, onScanSuccess, () => {});
+    setScanning(true);
+    return;
+  } catch (err2) {
+    console.warn('facingMode:environment failed:', err2?.message || err2);
+  }
+  // 方法3: カメラリストから選ぶ
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    if (!cameras || cameras.length === 0) {
+      return showCameraError('カメラが見つかりませんでした。ブラウザにカメラの使用を許可してください。');
+    }
+    // 背面カメラを優先
+    const back = cameras.find(c => /back|rear|environment|背面|外側/i.test(c.label || ''));
+    const cam = back || cameras[cameras.length - 1];
+    await html5QrCode.start(cam.id, config, onScanSuccess, () => {});
+    setScanning(true);
+  } catch (err3) {
+    console.error('all camera attempts failed:', err3);
+    showCameraError('原因：' + (err3?.message || err3?.name || 'カメラ許可がされていない可能性があります'));
   }
 }
 

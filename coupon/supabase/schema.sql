@@ -119,7 +119,7 @@ INSERT INTO settings (key, value) VALUES
   ('site_name', '"Jumpolin（トランポリンパーク）"'),
   ('referral_limit_per_month', '2'),
   ('referral_expire_days', '14'),
-  ('referrer_reward_label', '"次回ドリンク1杯無料"');
+  ('referrer_reward_label', '"次回ドリンク1本無料"');
 
 -- =====================================================
 -- Row Level Security（RLS）ポリシー

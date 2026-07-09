@@ -268,7 +268,7 @@
       siteName: out.siteName || 'Jumpolin（トランポリンパーク）',
       referralLimitPerMonth: out.referralLimitPerMonth || 2,
       referralExpireDays: out.referralExpireDays || 14,
-      referrerRewardLabel: out.referrerRewardLabel || '次回ドリンク1杯無料',
+      referrerRewardLabel: out.referrerRewardLabel || '次回ドリンク1本無料',
     };
   }
   async function updateSettings(patch) {
@@ -307,7 +307,7 @@
     await issueCouponToAll({
       type: 'オマケ',
       label: '初夏のドリンクサービス',
-      detail: 'お好きなソフトドリンク1杯プレゼント',
+      detail: 'お好きなソフトドリンク1本プレゼント',
       expiresAt: '2026-07-15T23:59:59',
     });
     return true;
