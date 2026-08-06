@@ -242,7 +242,7 @@
     ];
     for (const d of demos) await addStudent(d);
     await issueCouponToAll({
-      type: '誕生月特典', label: '6月生まれ特典:利用料20%OFF',
+      type: '誕生月特典', label: '6月生まれ特典:利用料300円引き',
       detail: '誕生月の方限定。1回のみ利用可', expiresAt: '2026-06-30T23:59:59',
     });
     await issueCouponToAll({
