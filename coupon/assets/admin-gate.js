@@ -5,7 +5,7 @@
  * ハッシュはSHA-256（変更時は下の ADMIN_PASS_HASH を差し替え）。
  */
 (function () {
-  const ADMIN_PASS_HASH = 'fe8532ed501cca6efe64ffdac03e51adff51b1a281cda6b38576237edd4aad0e'; // 'gymplus2026'
+  const ADMIN_PASS_HASH = '2a4cf08ad3689246d3d60799cb0b286c869c08e0a76eb11315f4ac2cd0a19a13'; // 'gymplus0601'
   const LS_KEY = 'gymplus_admin_ok_v1';
 
   // 認証済みなら何もしない
