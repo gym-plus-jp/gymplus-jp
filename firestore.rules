@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Jumpolin クーポンシステム — Firestore ルール
+// クライアント側は認証なしで rw アクセス（Supabase 版と同じセキュリティレベル）。
+// 管理画面(admin.html)・スタッフ案内(for-staff.html)は admin-gate.js のパスコードで保護されている。
+// スキャナー(staff.html)はスキャナー用途で常時開いておく前提で、クーポンの状態変更のみ許可。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // クーポン運用に必要なコレクション
+    match /students/{doc}          { allow read, write: if true; }
+    match /campaigns/{doc}         { allow read, write: if true; }
+    match /coupons/{doc}           { allow read, write: if true; }
+    match /referral_qrs/{doc}      { allow read, write: if true; }
+    match /referral_rewards/{doc}  { allow read, write: if true; }
+    match /redemptions/{doc}       { allow read, write: if true; }
+    match /settings/{doc}          { allow read, write: if true; }
+
+    // 上記以外は拒否（デフォルト deny）
+    match /{document=**} { allow read, write: if false; }
+  }
+}

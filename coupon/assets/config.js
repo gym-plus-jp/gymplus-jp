@@ -1,7 +1,15 @@
 /* Jumpolin クーポンシステム 設定
- * Supabase の URL と anon key。anon キーはクライアント公開前提の権限のみ。
+ * 2026-09-27: Supabase → Firebase (Firestore) に移行。
+ * apiKey は Web公開前提のブラウザ用鍵。Firestore ルールで保護している。
+ * Firebase プロジェクト: gymplus-coupon-cfd5d（株式会社Gym plus 専用、gymplus0601@gmail.com 所有）
  */
 window.GYMPLUS_CONFIG = {
-  SUPABASE_URL:  "https://agftmrnrmhrfhwpdhrxs.supabase.co",
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnZnRtcm5ybWhyZmh3cGRocnhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NTMxOTAsImV4cCI6MjA5ODQyOTE5MH0.dwywvV40cBVFtMCUEdM3_qWdcqobUrq8TZ2k7WraVFo",
+  FIREBASE_CONFIG: {
+    projectId: "gymplus-coupon-cfd5d",
+    appId: "1:432119379934:web:f8574c68503b8f424fcf4f",
+    storageBucket: "gymplus-coupon-cfd5d.firebasestorage.app",
+    apiKey: "AIzaSyDTyI8sdMGkWUv095x_3kp5CJH2IgKTW4E",
+    authDomain: "gymplus-coupon-cfd5d.firebaseapp.com",
+    messagingSenderId: "432119379934",
+  },
 };
