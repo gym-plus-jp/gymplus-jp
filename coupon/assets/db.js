@@ -5,8 +5,8 @@
  */
 
 (function () {
-  // Supabase 版が先にロードされていればスキップ
-  if (window.DB && window.DB.isSupabase) return;
+  // 他実装（Firebase / Supabase）が先にロードされていればスキップ
+  if (window.DB && (window.DB.isFirebase || window.DB.isSupabase)) return;
 
   const DB_KEY = 'gymplus_coupon_v1';
 
