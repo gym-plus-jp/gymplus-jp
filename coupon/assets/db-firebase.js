@@ -93,7 +93,10 @@
 
   // ===== Students =====
   async function getStudents() {
-    return snapshotDocs(db.collection('students').orderBy('createdAt', 'asc'), mapStudent);
+    // 単一コレクション + orderByのみは単一フィールドインデックスで動くはずだが、
+    // 保険として JS 側でソートに統一
+    const arr = await snapshotDocs(db.collection('students'), mapStudent);
+    return arr.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
   }
   async function getStudentByToken(token) {
     const snap = await db.collection('students').where('token', '==', token).limit(1).get();
@@ -146,10 +149,12 @@
 
   // ===== Coupons =====
   async function getCouponsForStudent(studentId) {
-    return snapshotDocs(
-      db.collection('coupons').where('studentId', '==', studentId).orderBy('issuedAt', 'desc'),
+    // 複合インデックス不要にするため where のみで取得→JS 側でソート
+    const arr = await snapshotDocs(
+      db.collection('coupons').where('studentId', '==', studentId),
       mapCoupon
     );
+    return arr.sort((a, b) => (b.issuedAt || '').localeCompare(a.issuedAt || ''));
   }
   async function getCouponByToken(token) {
     const snap = await db.collection('coupons').where('token', '==', token).limit(1).get();
@@ -229,18 +234,22 @@
 
   // ===== Referral QRs =====
   async function getReferralQrsForStudent(studentId) {
-    return snapshotDocs(
-      db.collection('referral_qrs').where('issuerStudentId', '==', studentId).orderBy('issuedAt', 'desc'),
+    // 複合インデックス不要にするため where のみで取得→JS 側でソート
+    const arr = await snapshotDocs(
+      db.collection('referral_qrs').where('issuerStudentId', '==', studentId),
       mapReferralQr
     );
+    return arr.sort((a, b) => (b.issuedAt || '').localeCompare(a.issuedAt || ''));
   }
   async function countReferralIssuedThisMonth(studentId) {
+    // 複合インデックス不要にするため where は issuerStudentId のみ→JS 側で月絞り
+    const snap = await db.collection('referral_qrs')
+      .where('issuerStudentId', '==', studentId).get();
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const snap = await db.collection('referral_qrs')
-      .where('issuerStudentId', '==', studentId)
-      .where('issuedAt', '>=', monthStart).get();
-    return snap.size;
+    let n = 0;
+    snap.forEach(d => { if ((d.data().issuedAt || '') >= monthStart) n++; });
+    return n;
   }
   async function issueReferralQr(studentId) {
     const student = await getStudentById(studentId);
