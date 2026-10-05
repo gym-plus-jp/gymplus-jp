@@ -81,11 +81,11 @@
 
 <div id="toast"></div>
 
-<script src="assets/config.js?v=20261005a"></script>
+<script src="assets/config.js?v=20261005b"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="assets/db-firebase.js?v=20261005a"></script>
-<script src="assets/db.js?v=20261005a"></script>
+<script src="assets/db-firebase.js?v=20261005b"></script>
+<script src="assets/db.js?v=20261005b"></script>
 <script>
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -113,15 +113,22 @@ function showCameraError(msg) {
       <div class="big-icon">📷</div>
       <div class="big-title">カメラを起動できません</div>
       <div class="detail" style="margin-bottom:12px;">${msg}</div>
-      <div style="background:#fff3cd; border:1px solid #ffe69c; padding:14px; border-radius:8px; font-size:12.5px; text-align:left; margin-bottom:14px; line-height:1.8;">
+      <div style="background:#fff3cd; border:1px solid #ffe69c; padding:14px; border-radius:8px; font-size:13px; text-align:left; margin-bottom:14px; line-height:1.9;">
         <strong>▼ 対処法（順番に試してください）</strong><br>
-        <strong>①</strong> ページを閉じて、Safari / Chromeで <strong>https://gymplus.jp/coupon/staff.html</strong> を開き直す<br>
-        <strong>②</strong> <u>iPhone(Safari)</u>：アドレスバー左にある <strong>「ぁあ」ボタン</strong>（文字サイズ変更アイコン）をタップ → <strong>「Webサイトの設定」</strong> → <strong>「カメラ」を「許可」</strong>に変更<br>
-        <strong>③</strong> <u>iPhone(Chrome) / Android</u>：アドレスバー左の <strong>「🔒 鍵アイコン」</strong>をタップ → <strong>「権限 / サイトの設定」</strong> → <strong>「カメラ」を「許可」</strong>に変更<br>
-        <strong>④</strong> それでも起動しない場合：<br>
-        <span style="margin-left:16px;">・iPhone：<strong>設定 → Safari → カメラ → 「許可」</strong></span><br>
-        <span style="margin-left:16px;">・Android：<strong>設定 → アプリ → Chrome → 権限 → カメラ → 「許可」</strong></span><br>
-        <strong>⑤</strong> 緊急時：下の <strong>「⌨️ 手動入力（テスト用）」</strong> ボタンから QR の内容を直接入力して処理
+        <strong>①</strong> このページを一度閉じ、Safari または Chrome で<br>
+        <span style="margin-left:16px;"><strong>https://gymplus.jp/coupon/staff.html</strong></span><br>
+        <span style="margin-left:16px;">を開き直す。</span><br>
+        <span style="margin-left:16px; color:#666;">※ 開き直すと「カメラへのアクセスを許可しますか？」と聞かれるので <strong>「許可」</strong> をタップ</span><br>
+        <br>
+        <strong>② それでも起動しない場合（iPhone）</strong><br>
+        <span style="margin-left:16px;"><strong>「設定」アプリ</strong>を開く → <strong>「Safari」</strong>をタップ → <strong>「カメラ」</strong>をタップ → <strong>「許可」</strong>を選ぶ</span><br>
+        <span style="margin-left:16px; color:#666;">※ Chromeで使っている場合は「Safari」の代わりに「Chrome」をタップ</span><br>
+        <br>
+        <strong>③ それでも起動しない場合（Android）</strong><br>
+        <span style="margin-left:16px;"><strong>「設定」アプリ</strong> → <strong>「アプリ」</strong> → <strong>「Chrome」</strong> → <strong>「権限」</strong> → <strong>「カメラ」</strong> → <strong>「許可」</strong>を選ぶ</span><br>
+        <br>
+        <strong>④ 緊急時</strong><br>
+        <span style="margin-left:16px;">下の <strong>「⌨️ 手動入力（テスト用）」</strong> ボタンから QRコードの内容を直接入力して処理</span>
       </div>
       <button class="btn btn-outline btn-sm" onclick="clearResult()">閉じる</button>
     </div>
