@@ -379,7 +379,7 @@
     for (const d of demos) await addStudent(d);
     await issueCouponToAll({
       type: '誕生月特典', label: '誕生月300円引き',
-      detail: '誕生月中1回まで利用料300円引き', expiresAt: '2026-12-31T23:59:59',
+      detail: '誕生月中1回まで利用料300円引き', expiresAt: null, // 無期限（毎年の誕生月に使えるように）
     });
     await issueCouponToAll({
       type: '割引券', label: '利用料500円OFF',
