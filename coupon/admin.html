@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>管理画面｜Gym plus クーポン</title>
 <link rel="stylesheet" href="assets/style.css">
-<script src="assets/admin-gate.js?v=20261005b"></script>
+<meta name="robots" content="noindex, nofollow">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
@@ -32,6 +32,7 @@
     <div class="tab" data-tab="allcoupons">📋 全クーポン一覧</div>
     <div class="tab" data-tab="history">📊 使用履歴</div>
     <div class="tab" data-tab="settings">⚙️ 設定</div>
+    <div class="tab" data-tab="staffs">🔑 スタッフ端末</div>
   </div>
 
   <!-- 生徒一覧 -->
@@ -234,6 +235,44 @@
     </div>
   </div>
 
+  <!-- スタッフ端末 -->
+  <div class="tab-panel" id="panel-staffs" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">🔑</span>
+        <span>登録用URLを発行</span>
+      </div>
+      <p class="card-subtitle">
+        受付スキャナーや管理画面を使う端末は、ここで発行した<strong>登録用URL</strong>をその端末で1回開くと使えるようになります。
+        URLは<strong>1回だけ・7日間</strong>有効です。
+      </p>
+      <form id="invite-form">
+        <div class="form-group">
+          <label class="form-label">端末の名前（あとで見分けるため）</label>
+          <input class="form-input" name="label" required maxlength="40" placeholder="例：受付iPad">
+        </div>
+        <div class="form-group">
+          <label class="form-label">できること</label>
+          <select class="form-select" name="role" required>
+            <option value="staff">受付スキャナーだけ</option>
+            <option value="admin">管理画面も使える（管理者）</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">登録用URLを発行する</button>
+      </form>
+      <div id="invite-result" style="margin-top:16px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">
+        <span class="icon">📱</span>
+        <span>登録済みの端末</span>
+      </div>
+      <p class="card-subtitle">なくした端末・使わなくなった端末は「解除」してください。</p>
+      <div id="staffs-list"></div>
+      <div id="invites-list" style="margin-top:16px;"></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- 生徒URL/QRモーダル風カード（インライン表示） -->
@@ -249,12 +288,19 @@
 
 <div id="toast"></div>
 
-<script src="assets/config.js?v=20261005b"></script>
+<script src="assets/config.js?v=20261110a"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="assets/db-firebase.js?v=20261005b"></script>
-<script src="assets/db.js?v=20261005b"></script>
+<script src="assets/db-firebase.js?v=20261110a"></script>
+<script src="assets/db.js?v=20261110a"></script>
+<script src="assets/staff-gate.js?v=20261110a"></script>
 <script>
+// 会員が入力した文字を画面に出すときは必ず esc() を通す
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"'`]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c]));
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -305,13 +351,13 @@ async function renderStudents() {
     return `
       <div class="student-row">
         <div>
-          <div class="name">${s.name}</div>
-          <div class="meta">${s.club}　・　電話下4桁 ${s.phoneLast4}　・　所持 ${coupons.length} 枚（うち使用済 ${usedCount}）</div>
+          <div class="name">${esc(s.name)}</div>
+          <div class="meta">${esc(s.club)}　・　電話下4桁 ${esc(s.phoneLast4)}　・　所持 ${coupons.length} 枚（うち使用済 ${usedCount}）</div>
         </div>
         <div class="actions">
-          <button class="btn btn-primary btn-sm" onclick="showStudentDetail('${s.id}')">URL/QR</button>
-          <a class="btn btn-outline btn-sm" href="student.html?u=${s.token}&preview=1" target="_blank">👁 プレビュー</a>
-          <button class="btn btn-outline btn-sm" onclick="deleteStudent('${s.id}')">削除</button>
+          <button class="btn btn-primary btn-sm" onclick="showStudentDetail('${esc(s.id)}')">URL/QR</button>
+          <a class="btn btn-outline btn-sm" href="student.html?u=${encodeURIComponent(s.token)}&preview=1" target="_blank">👁 プレビュー</a>
+          <button class="btn btn-outline btn-sm" onclick="deleteStudent('${esc(s.id)}')">削除</button>
         </div>
       </div>
     `;
@@ -321,7 +367,7 @@ async function renderStudents() {
 
 function studentMyPageUrl(token) {
   const base = location.href.replace(/\/[^/]*$/, '');
-  return base + '/student.html?u=' + token;
+  return base + '/student.html?u=' + encodeURIComponent(token);
 }
 
 async function showStudentDetail(studentId) {
@@ -330,22 +376,25 @@ async function showStudentDetail(studentId) {
   const url = studentMyPageUrl(s.token);
   const body = document.getElementById('student-detail-body');
   body.innerHTML = `
-    <h2 style="margin-bottom: 4px;">${s.name}</h2>
-    <p style="color: var(--text-soft); font-size:13px; margin-bottom:16px;">${s.club}</p>
+    <h2 style="margin-bottom: 4px;">${esc(s.name)}</h2>
+    <p style="color: var(--text-soft); font-size:13px; margin-bottom:16px;">${esc(s.club)}</p>
     <div class="qr-display">
       <div id="qr-canvas"></div>
       <div class="qr-caption">このQRをカード印刷 or LINEで送付</div>
     </div>
     <div class="form-group">
       <label class="form-label">マイページURL</label>
-      <input class="form-input" readonly value="${url}" onclick="this.select()">
+      <input class="form-input" readonly value="${esc(url)}" onclick="this.select()">
       <div class="form-help">クリックで全選択 → コピーして配布</div>
     </div>
     <div style="display:flex; gap:8px;">
-      <a class="btn btn-primary btn-sm" href="${url}" target="_blank">マイページを開く</a>
-      <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText('${url}'); toast('URLをコピーしました')">URLをコピー</button>
+      <a class="btn btn-primary btn-sm" href="${esc(url)}" target="_blank">マイページを開く</a>
+      <button class="btn btn-outline btn-sm" id="copy-mypage-url">URLをコピー</button>
     </div>
   `;
+  document.getElementById('copy-mypage-url').onclick = () => {
+    navigator.clipboard.writeText(url); toast('URLをコピーしました');
+  };
   document.getElementById('student-detail-modal').style.display = 'block';
   setTimeout(() => {
     const el = document.getElementById('qr-canvas');
@@ -389,8 +438,8 @@ async function renderHistory() {
           return `<tr>
             <td>${new Date(r.at).toLocaleString('ja-JP')}</td>
             <td>${isCoupon ? '🎫 クーポン' : '👯 紹介'}</td>
-            <td><div>${target}</div><div class="meta" style="font-size:11px; color:var(--text-soft)">${owner}</div></td>
-            <td>${r.by}</td>
+            <td><div>${esc(target)}</div><div class="meta" style="font-size:11px; color:var(--text-soft)">${esc(owner)}</div></td>
+            <td>${esc(r.by)}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -422,11 +471,20 @@ document.getElementById('settings-form').addEventListener('submit', async e => {
 document.getElementById('register-form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
-  const s = await DB.addStudent({
-    name: f.name.value.trim(),
-    club: f.club.value,
-    phoneLast4: f.phoneLast4.value.trim(),
-  });
+  let s;
+  try {
+    s = await DB.addStudent({
+      name: f.name.value.trim(),
+      club: f.club.value,
+      phoneLast4: f.phoneLast4.value.trim(),
+    });
+  } catch (err) {
+    console.error(err);
+    toast(err.code === 'duplicate'
+      ? '同じ名前と電話下4桁の会員がすでにいるか、使えない文字が入っています'
+      : '登録に失敗しました');
+    return;
+  }
   // 新規登録した生徒に、有効なキャンペーンを自動配布
   await DB.issueActiveCampaignsToStudent(s.id);
   f.reset();
@@ -440,6 +498,10 @@ document.getElementById('register-form').addEventListener('submit', async e => {
 document.getElementById('coupon-form').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
+  if (/[%％]/.test(f.label.value + f.detail.value)) {
+    toast('％割引は使えません。「500円引き」のように円で入力してください');
+    return;
+  }
   const n = await DB.issueCouponToAll({
     type: f.type.value,
     label: f.label.value.trim(),
@@ -585,10 +647,10 @@ async function renderAllCoupons() {
         ${filtered.map(c => `
           <tr>
             <td>${statusBadge(c.status)}</td>
-            <td><strong>${c.studentName}</strong></td>
+            <td><strong>${esc(c.studentName)}</strong></td>
             <td>
-              <div style="font-weight:600;">${c.label}</div>
-              <div class="meta" style="font-size:11px; color:var(--text-soft);">${c.type}${c.detail ? '・' + c.detail : ''}</div>
+              <div style="font-weight:600;">${esc(c.label)}</div>
+              <div class="meta" style="font-size:11px; color:var(--text-soft);">${esc(c.type)}${c.detail ? '・' + esc(c.detail) : ''}</div>
             </td>
             <td style="font-size:12px;">${c.issuedAt ? new Date(c.issuedAt).toLocaleDateString('ja-JP') : '-'}</td>
             <td style="font-size:12px;">${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('ja-JP') : '-'}</td>
@@ -605,8 +667,85 @@ async function renderAll() {
   renderLineKit();
 }
 
-renderAll();
-loadSettings();
+// ===== スタッフ端末 =====
+async function renderStaffs() {
+  const [staffs, invites] = await Promise.all([DB.getStaffs(), DB.getStaffInvites()]);
+  const fmt = v => v ? new Date(v).toLocaleString('ja-JP') : '-';
+  document.getElementById('staffs-list').innerHTML = staffs.length === 0
+    ? '<div class="empty"><p>登録済みの端末はありません</p></div>'
+    : staffs.map(s => `
+      <div class="student-row">
+        <div>
+          <div class="name">${esc(s.label)}${s.isMe ? '（この端末）' : ''}</div>
+          <div class="meta">${esc(StaffGate.ROLE_NAME[s.role] || s.role)}　・　登録 ${fmt(s.createdAt)}　・　最終利用 ${fmt(s.lastSeenAt)}</div>
+        </div>
+        <div class="actions">
+          ${s.isMe ? '' : `<button class="btn btn-outline btn-sm" onclick="removeStaff('${esc(s.id)}')">解除</button>`}
+        </div>
+      </div>`).join('');
+  document.getElementById('invites-list').innerHTML = invites.length === 0 ? '' :
+    '<h3 style="font-size:14px; color:var(--text-soft); margin-bottom:8px;">まだ使われていない登録用URL</h3>' +
+    invites.map(i => `
+      <div class="student-row">
+        <div>
+          <div class="name">${esc(i.label)}</div>
+          <div class="meta">${esc(StaffGate.ROLE_NAME[i.role] || i.role)}　・　期限 ${fmt(i.expiresAt)}</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-outline btn-sm" onclick="removeInvite('${esc(i.id)}')">取り消す</button>
+        </div>
+      </div>`).join('');
+}
+
+document.getElementById('invite-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  const label = f.label.value.trim().replace(/[<>&"'`]/g, '');
+  if (!label) return;
+  const { url } = await DB.createStaffInvite({ role: f.role.value, label });
+  f.reset();
+  const el = document.getElementById('invite-result');
+  el.innerHTML = `
+    <div style="background:#f0fdf4; border:1px solid #86efac; padding:14px; border-radius:10px;">
+      <div style="font-weight:700; margin-bottom:6px;">「${esc(label)}」の登録用URL</div>
+      <div style="font-size:12px; color:var(--text-soft); margin-bottom:8px;">
+        登録したい端末で開いてください（スキャナーを使うのと同じブラウザで）。1回使うと無効になります。
+      </div>
+      <input class="form-input" readonly value="${esc(url)}" onclick="this.select()">
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn btn-primary btn-sm" id="copy-invite-url">📋 URLをコピー</button>
+      </div>
+      <div class="qr-display"><div id="invite-qr"></div>
+        <div class="qr-caption">端末のカメラで読み取っても登録できます</div></div>
+    </div>`;
+  document.getElementById('copy-invite-url').onclick = () => {
+    navigator.clipboard.writeText(url); toast('URLをコピーしました');
+  };
+  new QRCode(document.getElementById('invite-qr'), { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+  renderStaffs();
+});
+
+async function removeStaff(id) {
+  if (!confirm('この端末の登録を解除します。よろしいですか？')) return;
+  await DB.deleteStaff(id);
+  toast('解除しました');
+  renderStaffs();
+}
+async function removeInvite(id) {
+  if (!confirm('この登録用URLを取り消します。よろしいですか？')) return;
+  await DB.deleteStaffInvite(id);
+  toast('取り消しました');
+  renderStaffs();
+}
+
+// 起動：管理者として登録した端末だけ中身を出す
+(async () => {
+  const role = await StaffGate.check({ need: 'admin', block: true });
+  if (!role) return;
+  renderAll();
+  loadSettings();
+  renderStaffs();
+})();
 </script>
 </body>
 </html>

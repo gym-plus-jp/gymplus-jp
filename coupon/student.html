@@ -120,12 +120,17 @@
 
 <div id="toast"></div>
 
-<script src="assets/config.js?v=20261005b"></script>
+<script src="assets/config.js?v=20261110a"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="assets/db-firebase.js?v=20261005b"></script>
-<script src="assets/db.js?v=20261005b"></script>
+<script src="assets/db-firebase.js?v=20261110a"></script>
+<script src="assets/db.js?v=20261110a"></script>
 <script>
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"'`]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c]));
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -149,7 +154,8 @@ let student = null;
       'マイページにはご自分の固有URLからアクセスしてください。管理画面で発行された URL（?u=... を含むもの）を開いてください。';
     return;
   }
-  student = await DB.getStudentByToken(token);
+  // 管理者プレビューでは、管理者の端末をこの会員に結びつけない
+  student = await DB.getStudentByToken(token, { link: !isAdminPreview });
   if (!student) {
     show('error-view');
     document.getElementById('error-title').textContent = '生徒情報が見つかりません';
@@ -163,6 +169,12 @@ let student = null;
     initMain();
     return;
   }
+  // この端末で開いたマイページの控え（登録画面で「登録済み」と出たときの案内用）
+  try {
+    const pages = JSON.parse(localStorage.getItem('gymplus_my_pages') || '[]').filter(p => p.token !== token);
+    pages.push({ name: student.name, token });
+    localStorage.setItem('gymplus_my_pages', JSON.stringify(pages.slice(-10)));
+  } catch (e) {}
   const key = 'gymplus_verified_' + student.id;
   if (localStorage.getItem(key) === '1') {
     initMain();
@@ -174,7 +186,7 @@ let student = null;
 function showAdminPreviewBanner() {
   const banner = document.createElement('div');
   banner.style.cssText = 'position:sticky; top:0; z-index:1000; background:linear-gradient(135deg,#ff6b35,#e85a2a); color:#fff; padding:10px 16px; text-align:center; font-size:13px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.15);';
-  banner.innerHTML = '👁 <strong>管理者プレビュー</strong>：' + student.name + ' さんのマイページを閲覧中（本人による操作ではありません） <a href="admin.html" style="color:#fff; text-decoration:underline; margin-left:8px;">← 管理画面に戻る</a>';
+  banner.innerHTML = '👁 <strong>管理者プレビュー</strong>：' + esc(student.name) + ' さんのマイページを閲覧中（本人による操作ではありません） <a href="admin.html" style="color:#fff; text-decoration:underline; margin-left:8px;">← 管理画面に戻る</a>';
   document.body.insertBefore(banner, document.body.firstChild);
 }
 
@@ -237,9 +249,9 @@ async function renderCoupons() {
     <div class="coupon ${c.usedAt ? 'used' : ''}">
       <div style="display:flex; justify-content:space-between; align-items:start; gap:8px;">
         <div>
-          <div class="coupon-type">${c.type === 'referral_reward' ? '紹介特典' : c.type}</div>
-          <div class="coupon-title">${c.label}</div>
-          ${c.detail ? `<div style="font-size:13px; color:var(--text-soft); margin-top:4px;">${c.detail}</div>` : ''}
+          <div class="coupon-type">${c.type === 'referral_reward' ? '紹介特典' : esc(c.type)}</div>
+          <div class="coupon-title">${esc(c.label)}</div>
+          ${c.detail ? `<div style="font-size:13px; color:var(--text-soft); margin-top:4px;">${esc(c.detail)}</div>` : ''}
         </div>
         ${couponStatusBadge(c)}
       </div>
@@ -249,7 +261,7 @@ async function renderCoupons() {
       </div>
       ${!c.usedAt && (!c.expiresAt || new Date(c.expiresAt) >= new Date()) ? `
         <div class="coupon-actions">
-          <button class="btn btn-primary btn-sm" onclick="showCouponQr('${c.id}')">📷 受付で使う</button>
+          <button class="btn btn-primary btn-sm" onclick="showCouponQr('${esc(c.id)}')">📷 受付で使う</button>
         </div>
       ` : ''}
     </div>
@@ -263,9 +275,9 @@ async function showCouponQr(couponId) {
   const payload = 'cp:' + c.token;
   const body = document.getElementById('coupon-modal-body');
   body.innerHTML = `
-    <div class="coupon-type">${c.type}</div>
-    <div class="coupon-title">${c.label}</div>
-    ${c.detail ? `<div style="font-size:13px; color:var(--text-soft); margin-top:4px;">${c.detail}</div>` : ''}
+    <div class="coupon-type">${esc(c.type)}</div>
+    <div class="coupon-title">${esc(c.label)}</div>
+    ${c.detail ? `<div style="font-size:13px; color:var(--text-soft); margin-top:4px;">${esc(c.detail)}</div>` : ''}
     <div class="qr-display">
       <div id="coupon-qr-canvas"></div>
       <div class="qr-caption">受付スタッフに画面を見せてください</div>
@@ -321,7 +333,7 @@ async function renderInvite() {
   el.innerHTML = '<h3 style="font-size:14px; color:var(--text-soft); margin-bottom:10px;">発行済み</h3>' +
     all.map(r => {
       let status, badge;
-      if (r.usedAt) { status = '✅ 利用済み（' + r.usedByName + 'さん）'; badge = 'badge-used'; }
+      if (r.usedAt) { status = '✅ 利用済み（' + esc(r.usedByName) + 'さん）'; badge = 'badge-used'; }
       else if (new Date(r.expiresAt) < new Date()) { status = '⏰ 期限切れ'; badge = 'badge-expired'; }
       else { status = '📨 利用待ち'; badge = 'badge-available'; }
       return `
@@ -333,7 +345,7 @@ async function renderInvite() {
             <div style="font-size:12px; margin-top:2px;">${status}</div>
           </div>
           ${!r.usedAt && new Date(r.expiresAt) >= new Date()
-            ? `<button class="btn btn-outline btn-sm" onclick="showInviteQr('${r.id}')">QR表示</button>`
+            ? `<button class="btn btn-outline btn-sm" onclick="showInviteQr('${esc(r.id)}')">QR表示</button>`
             : ''}
         </div>
       `;
@@ -378,7 +390,7 @@ async function showInviteQr(referralId) {
       📝 <strong>使い方</strong><br>
       ① 友達が Jumpolin に来店<br>
       ② 受付でこのQRを提示<br>
-      ③ 友達は割引適用、あなたには「<strong>${settings.referrerRewardLabel}</strong>」が届きます
+      ③ 友達は割引適用、あなたには「<strong>${esc(settings.referrerRewardLabel)}</strong>」が届きます
     </div>
   `;
   document.getElementById('invite-modal').style.display = 'block';

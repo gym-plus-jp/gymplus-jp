@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
 <title>受付スキャナー｜Gym plus クーポン</title>
 <link rel="stylesheet" href="assets/style.css">
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -81,12 +82,22 @@
 
 <div id="toast"></div>
 
-<script src="assets/config.js?v=20261005b"></script>
+<script src="assets/config.js?v=20261110a"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="assets/db-firebase.js?v=20261005b"></script>
-<script src="assets/db.js?v=20261005b"></script>
+<script src="assets/db-firebase.js?v=20261110a"></script>
+<script src="assets/db.js?v=20261110a"></script>
+<script src="assets/staff-gate.js?v=20261110a"></script>
 <script>
+// 会員が入力した文字を画面に出すときは必ず esc() を通す
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"'`]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c]));
+}
+
+// 運営の端末として登録されているか（未登録なら上に案内を出す）
+StaffGate.check({ need: 'staff', block: false });
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -197,6 +208,15 @@ function onScanSuccess(decodedText) {
   processScan(decodedText);
 }
 
+function showDbError(err) {
+  console.error(err);
+  if (DB.isDenied(err)) {
+    return showResult({ ok:false, big:'🔒', title:'この端末は登録されていません',
+      detail:'管理者から届いた「登録用URL」を、この端末で1回開いてください。' });
+  }
+  showResult({ ok:false, big:'⚠️', title:'通信エラー', detail:'電波を確認して、もう一度読み取ってください。' });
+}
+
 // 併用不可判定：同じ会員が直近30分以内に他クーポンを使用していたら true
 async function hasRecentUsage(studentId, thisCouponId) {
   const list = await DB.getCouponsForStudent(studentId);
@@ -207,36 +227,44 @@ async function hasRecentUsage(studentId, thisCouponId) {
 }
 
 async function processScan(text) {
+  try {
+    await processScanInner(text);
+  } catch (err) {
+    showDbError(err);
+  }
+}
+
+async function processScanInner(text) {
   if (text.startsWith('cp:')) {
     const c = await DB.getCouponByToken(text.slice(3));
     if (!c) return showResult({ ok:false, big:'❓', title:'不明なQR', detail:'登録されていないクーポンです' });
     const student = await DB.getStudentById(c.studentId);
     if (c.usedAt) return showResult({ ok:false, big:'❌', title:'使用済み',
       detail:`このクーポンは ${new Date(c.usedAt).toLocaleString('ja-JP')} に使用済みです`,
-      sub:`${student?.name || ''} さん / ${c.label}`});
+      sub:`${esc(student?.name || '')} さん / ${esc(c.label)}`});
     if (c.expiresAt && new Date(c.expiresAt) < new Date())
       return showResult({ ok:false, warn:true, big:'⏰', title:'期限切れ',
         detail:`有効期限：${new Date(c.expiresAt).toLocaleDateString('ja-JP')}`,
-        sub:`${student?.name || ''} さん / ${c.label}`});
+        sub:`${esc(student?.name || '')} さん / ${esc(c.label)}`});
     // ★ 併用不可チェック
     const recentUsed = await hasRecentUsage(c.studentId, c.id);
     if (recentUsed) {
       return showResult({ ok:false, warn:true, big:'⚠️', title:'併用不可',
-        detail:`${student?.name || ''} さんは${Math.round((new Date() - new Date(recentUsed.usedAt))/60000)}分前に別のクーポン「${recentUsed.label}」を使用済みです`,
+        detail:`${esc(student?.name || '')} さんは${Math.round((new Date() - new Date(recentUsed.usedAt))/60000)}分前に別のクーポン「${esc(recentUsed.label)}」を使用済みです`,
         sub:`他のクーポンとの併用はできません`,
-        overrideCouponId: c.id});
+        overrideCouponId: esc(c.id)});
     }
     showCouponConfirm(c, student);
   } else if (text.startsWith('rf:')) {
     const r = await DB.getReferralByToken(text.slice(3));
     if (!r) return showResult({ ok:false, big:'❓', title:'不明なQR', detail:'登録されていない招待QRです' });
     if (r.usedAt) return showResult({ ok:false, big:'❌', title:'使用済み',
-      detail:`この招待QRは ${new Date(r.usedAt).toLocaleString('ja-JP')} に使用済み（${r.usedByName}さん）`,
-      sub:`${r.issuerName} さん発行`});
+      detail:`この招待QRは ${new Date(r.usedAt).toLocaleString('ja-JP')} に使用済み（${esc(r.usedByName)}さん）`,
+      sub:`${esc(r.issuerName)} さん発行`});
     if (new Date(r.expiresAt) < new Date())
       return showResult({ ok:false, warn:true, big:'⏰', title:'期限切れ',
         detail:`有効期限：${new Date(r.expiresAt).toLocaleDateString('ja-JP')}`,
-        sub:`${r.issuerName} さん発行`});
+        sub:`${esc(r.issuerName)} さん発行`});
     pendingReferral = r;
     document.getElementById('friend-name').value = '';
     document.getElementById('friend-modal').style.display = 'block';
@@ -254,15 +282,15 @@ function showCouponConfirm(c, student) {
         <span class="icon">🎫</span>
         <span>クーポン確認</span>
       </div>
-      <div style="font-size:13px; color:var(--text-soft);">${student?.name || ''} さん（${student?.club || ''}）</div>
-      <div style="font-size:11px; color:var(--primary); font-weight:700; margin-top:8px;">${c.type}</div>
-      <div style="font-size:22px; font-weight:800; margin:4px 0;">${c.label}</div>
-      ${c.detail ? `<div style="font-size:13px; color:var(--text-soft);">${c.detail}</div>` : ''}
+      <div style="font-size:13px; color:var(--text-soft);">${student ? `${esc(student.name)} さん（${esc(student.club)}）` : '（会員名は登録済みの端末でだけ表示されます）'}</div>
+      <div style="font-size:11px; color:var(--primary); font-weight:700; margin-top:8px;">${esc(c.type)}</div>
+      <div style="font-size:22px; font-weight:800; margin:4px 0;">${esc(c.label)}</div>
+      ${c.detail ? `<div style="font-size:13px; color:var(--text-soft);">${esc(c.detail)}</div>` : ''}
       <div style="font-size:12px; color:var(--text-soft); margin-top:8px;">
         有効期限：${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('ja-JP') : 'なし'}
       </div>
       <div style="display:flex; gap:8px; margin-top:16px;">
-        <button class="btn btn-primary btn-full" onclick="confirmRedeemCoupon('${c.id}')">✅ 使用する</button>
+        <button class="btn btn-primary btn-full" onclick="confirmRedeemCoupon('${esc(c.id)}')">✅ 使用する</button>
         <button class="btn btn-outline btn-sm" onclick="clearResult()">キャンセル</button>
       </div>
     </div>
@@ -271,24 +299,35 @@ function showCouponConfirm(c, student) {
 }
 
 async function confirmRedeemCoupon(couponId) {
-  const r = await DB.redeemCoupon(couponId, '受付');
+  let r;
+  try {
+    r = await DB.redeemCoupon(couponId, '受付');
+  } catch (err) {
+    return showDbError(err);
+  }
   if (!r.ok) {
-    showResult({ ok:false, big:'❌', title:'処理失敗', detail: r.reason });
+    showResult({ ok:false, big:'❌', title:'処理失敗', detail: esc(r.reason) });
     return;
   }
   showResult({
     ok:true, big:'✅', title:'使用OK',
-    detail:`${r.coupon.label} を消費しました`,
+    detail:`${esc(r.coupon.label)} を消費しました`,
     sub:`${new Date(r.coupon.usedAt).toLocaleString('ja-JP')}`,
   });
 }
 
 async function confirmFriend() {
   const name = document.getElementById('friend-name').value.trim() || '（記名なし）';
-  const r = await DB.redeemReferralQr(pendingReferral.id, name, '受付');
+  let r;
+  try {
+    r = await DB.redeemReferralQr(pendingReferral.id, name, '受付');
+  } catch (err) {
+    closeFriendModal();
+    return showDbError(err);
+  }
   closeFriendModal();
   if (!r.ok) {
-    showResult({ ok:false, big:'❌', title:'処理失敗', detail: r.reason });
+    showResult({ ok:false, big:'❌', title:'処理失敗', detail: esc(r.reason) });
     return;
   }
   const [issuer, settings] = await Promise.all([
@@ -297,8 +336,8 @@ async function confirmFriend() {
   ]);
   showResult({
     ok:true, big:'✅', title:'招待QR 適用',
-    detail:`${name} さんに割引を適用しました`,
-    sub:`紹介者：${issuer?.name || ''} さんに「${settings.referrerRewardLabel}」を付与`,
+    detail:`${esc(name)} さんに割引を適用しました`,
+    sub:`紹介者：${esc(issuer?.name || r.referral.issuerName || '')} さんに「${esc(settings.referrerRewardLabel)}」を付与`,
   });
   pendingReferral = null;
 }
@@ -333,8 +372,7 @@ function showResult({ ok, warn, big, title, detail, sub, overrideCouponId }) {
 }
 
 async function overrideAndRedeem(couponId) {
-  const c = await DB.getCouponByToken((await DB.getAllCoupons()).find(x => x.id === couponId)?.token);
-  if (c) confirmRedeemCoupon(couponId);
+  confirmRedeemCoupon(couponId);
 }
 
 function clearResult() {

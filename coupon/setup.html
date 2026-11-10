@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>端末の登録｜Gym plus クーポン</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <h1>
+      <img src="assets/logos/jumpolin.jpg" class="app-header-logo" alt="" onerror="this.style.display='none'">
+      🔑 端末の登録 <span class="badge">STAFF</span>
+    </h1>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card" style="text-align:center;">
+    <div id="setup-icon" style="font-size:56px;">⏳</div>
+    <div id="setup-title" style="font-size:20px; font-weight:800; margin:8px 0;">確認しています…</div>
+    <p id="setup-msg" style="color:var(--text-soft); font-size:14px; line-height:1.8;"></p>
+    <div id="setup-actions" style="display:flex; gap:8px; justify-content:center; margin-top:16px; flex-wrap:wrap;"></div>
+  </div>
+</div>
+
+<script src="assets/config.js?v=20261110a"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="assets/db-firebase.js?v=20261110a"></script>
+<script>
+// 登録用URL（setup.html#k=...）の秘密の文字列で、この端末を運営として登録する。
+// #以降はサーバーに送られない。読み取ったらすぐアドレス欄から消す。
+const m = location.hash.match(/k=([A-Za-z0-9_-]+)/);
+const secret = m ? m[1] : '';
+history.replaceState(null, '', location.pathname);
+
+function done(icon, title, msg, actions) {
+  document.getElementById('setup-icon').textContent = icon;
+  document.getElementById('setup-title').textContent = title;
+  document.getElementById('setup-msg').textContent = msg;
+  document.getElementById('setup-actions').innerHTML = (actions || []).map(a =>
+    `<a class="btn ${a.primary ? 'btn-primary' : 'btn-outline'}" href="${a.href}">${a.label}</a>`).join('');
+}
+const TO_SCANNER = { href: 'staff.html', label: '📷 受付スキャナーを開く', primary: true };
+const TO_ADMIN = { href: 'admin.html', label: '⚙️ 管理画面を開く', primary: true };
+
+(async () => {
+  const role = await DB.getMyRole();
+  if (role) {
+    return done('✅', 'この端末は登録済みです',
+      `${StaffRoleName(role)}として使えます。`, [role === 'admin' ? TO_ADMIN : TO_SCANNER]);
+  }
+  if (!secret) {
+    return done('⚠️', '登録用URLが正しくありません',
+      '管理者から届いたURLを、途中で切らずにそのまま開いてください。');
+  }
+  const r = await DB.claimStaffInvite(secret);
+  if (r.ok) {
+    return done('✅', '登録しました',
+      `この端末を「${r.label}」（${StaffRoleName(r.role)}）として登録しました。このブラウザで次回から自動で使えます。`,
+      [r.role === 'admin' ? TO_ADMIN : TO_SCANNER]);
+  }
+  if (r.reason === 'expired') {
+    return done('⏰', 'このURLは期限切れです', '管理者に新しい登録用URLをもらってください。');
+  }
+  done('❌', 'このURLは使えません',
+    'すでに使われたか、取り消されたURLです。管理者に新しい登録用URLをもらってください。');
+})();
+
+function StaffRoleName(role) { return role === 'admin' ? '管理者' : '受付スタッフ'; }
+</script>
+</body>
+</html>

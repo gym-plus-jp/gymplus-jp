@@ -181,12 +181,17 @@
 
 <div id="toast"></div>
 
-<script src="assets/config.js?v=20261005b"></script>
+<script src="assets/config.js?v=20261110a"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="assets/db-firebase.js?v=20261005b"></script>
-<script src="assets/db.js?v=20261005b"></script>
+<script src="assets/db-firebase.js?v=20261110a"></script>
+<script src="assets/db.js?v=20261110a"></script>
 <script>
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"'`]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c]));
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -208,36 +213,62 @@ function updateRegisteredList() {
   document.getElementById('registered-list-items').innerHTML =
     registeredStudents.map((s, i) => `
       <div style="padding: 4px 0; display: flex; justify-content: space-between; align-items: center;">
-        <span>${i + 1}. <strong>${s.name}</strong>（${s.club}）</span>
-        <a href="${base}/student.html?u=${s.token}" style="font-size: 11px; color: var(--brand-mid, #1e6fcf);">マイページ →</a>
+        <span>${i + 1}. <strong>${esc(s.name)}</strong>（${esc(s.club)}）</span>
+        <a href="${base}/student.html?u=${encodeURIComponent(s.token)}" style="font-size: 11px; color: var(--brand-mid, #1e6fcf);">マイページ →</a>
       </div>
     `).join('');
 }
 
+// この端末で登録したマイページの控え（登録済みと言われたときに案内するため）
+function normName(n) { return String(n || '').normalize('NFKC').replace(/\s+/g, ''); }
+function loadMyPages() {
+  try { return JSON.parse(localStorage.getItem('gymplus_my_pages') || '[]'); } catch (e) { return []; }
+}
+function saveMyPage(name, token) {
+  const list = loadMyPages().filter(p => p.token !== token);
+  list.push({ name, token });
+  localStorage.setItem('gymplus_my_pages', JSON.stringify(list.slice(-10)));
+}
+
+function checkName(name) {
+  if (!name || name.length > 40) { toast('お名前は40文字までで入力してください'); return false; }
+  if (/[<>&"'`%％]/.test(name)) { toast('お名前に記号（< > & " \' ` %）は使えません'); return false; }
+  return true;
+}
+
 async function registerStudent(name, club, phoneLast4) {
   const result = await DB.upsertStudent({ name, club, phoneLast4 });
+  if (result.duplicate) {
+    const saved = loadMyPages().find(p => normName(p.name) === normName(name));
+    return { duplicate: true, name, token: saved ? saved.token : null };
+  }
   const student = result.student;
   const issued = await DB.issueActiveCampaignsToStudent(student.id);
   localStorage.setItem('gymplus_verified_' + student.id, '1');
-  await DB.markStudentVerified(student.id);
-  return { student, created: result.created, issued };
+  saveMyPage(student.name, student.token);
+  return { student, created: true, issued };
 }
 
-function showDoneView({ student, created, issued }) {
+function showDoneView({ student, created, issued, duplicate, name, token }) {
   document.getElementById('intro-view').style.display = 'none';
   document.getElementById('sibling-view').style.display = 'none';
   document.getElementById('done-view').style.display = '';
-  document.getElementById('done-greeting').textContent =
-    created
-      ? `${student.name} さん、登録完了！`
-      : `${student.name} さん、おかえりなさい！`;
-  document.getElementById('done-msg').innerHTML =
-    created
-      ? `${issued} 種類のクーポンをお届けしました 🎁`
-      : `すでに登録済みです。マイページからクーポンをご確認ください。`;
   const base = location.href.replace(/\/[^/]*$/, '');
-  document.getElementById('goto-mypage').href =
-    base + '/student.html?u=' + student.token;
+  const btn = document.getElementById('goto-mypage');
+  if (duplicate) {
+    // 登録済みの会員の情報は、この画面からは出さない（他人に見られないように）
+    document.getElementById('done-greeting').textContent = `${name} さんは登録済みです`;
+    document.getElementById('done-msg').textContent = token
+      ? 'この端末で前に登録したマイページを開けます。'
+      : '前に開いたマイページ（ブックマークや、登録したときのURL）をご覧ください。わからないときは受付スタッフにお声がけください。';
+    btn.style.display = token ? '' : 'none';
+    if (token) btn.href = base + '/student.html?u=' + encodeURIComponent(token);
+  } else {
+    document.getElementById('done-greeting').textContent = `${student.name} さん、登録完了！`;
+    document.getElementById('done-msg').textContent = `${issued} 種類のクーポンをお届けしました 🎁`;
+    btn.style.display = '';
+    btn.href = base + '/student.html?u=' + encodeURIComponent(student.token);
+  }
   updateRegisteredList();
 }
 
@@ -246,6 +277,9 @@ function showSiblingForm() {
   document.getElementById('sibling-view').style.display = '';
   document.getElementById('sibling-phone-display').textContent = currentPhoneLast4;
   document.getElementById('sibling-form').reset();
+  const sbtn = document.querySelector('#sibling-form button[type="submit"]');
+  sbtn.disabled = false;
+  sbtn.textContent = '👨‍👩‍👧 このお子様を登録';
   setTimeout(() => document.querySelector('#sibling-form [name=name]').focus(), 100);
   window.scrollTo(0, 0);
 }
@@ -266,14 +300,24 @@ document.getElementById('join-form').addEventListener('submit', async e => {
     toast('電話下4桁は数字4桁で入力してください');
     return;
   }
+  if (!checkName(name)) return;
   const submitBtn = f.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
   submitBtn.textContent = '登録中…';
 
-  const result = await registerStudent(name, club, phoneLast4);
-  currentPhoneLast4 = phoneLast4;
-  registeredStudents.push({ name: result.student.name, club: result.student.club, token: result.student.token });
-  showDoneView(result);
+  try {
+    const result = await registerStudent(name, club, phoneLast4);
+    currentPhoneLast4 = phoneLast4;
+    if (!result.duplicate) {
+      registeredStudents.push({ name: result.student.name, club: result.student.club, token: result.student.token });
+    }
+    showDoneView(result);
+  } catch (err) {
+    console.error(err);
+    toast('登録に失敗しました。電波を確認してもう一度お試しください');
+    submitBtn.disabled = false;
+    submitBtn.textContent = '🎫 クーポンを受け取る';
+  }
 });
 
 // 兄弟追加登録
@@ -282,18 +326,18 @@ document.getElementById('sibling-form').addEventListener('submit', async e => {
   const f = e.target;
   const name = f.name.value.trim();
   const club = f.club.value;
+  if (!checkName(name)) return;
   const submitBtn = f.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
   submitBtn.textContent = '登録中…';
 
   try {
     const result = await registerStudent(name, club, currentPhoneLast4);
-    // 既に登録済み会員でなければリストに追加
-    if (!registeredStudents.find(s => s.token === result.student.token)) {
+    if (!result.duplicate && !registeredStudents.find(s => s.token === result.student.token)) {
       registeredStudents.push({ name: result.student.name, club: result.student.club, token: result.student.token });
     }
     showDoneView(result);
-    toast(`${name} さん、登録完了！`);
+    toast(result.duplicate ? `${name} さんは登録済みです` : `${name} さん、登録完了！`);
   } catch (err) {
     console.error(err);
     toast('登録に失敗しました');

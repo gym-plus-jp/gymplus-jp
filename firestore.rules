@@ -1,21 +1,242 @@
 rules_version = '2';
 
-// Jumpolin クーポンシステム — Firestore ルール
-// クライアント側は認証なしで rw アクセス（Supabase 版と同じセキュリティレベル）。
-// 管理画面(admin.html)・スタッフ案内(for-staff.html)は admin-gate.js のパスコードで保護されている。
-// スキャナー(staff.html)はスキャナー用途で常時開いておく前提で、クーポンの状態変更のみ許可。
+// Jumpolin クーポンシステム — Firestore ルール（2026-11-10 全面改訂）
+//
+// だれが何をできるか
+//   - 会員（保護者）: ログイン画面なし。ブラウザごとに Firebase の匿名ログインを使う。
+//     マイページURLの token を知っている端末だけが、その会員の記録を get できる
+//     （links/{uid} に「この端末はこの会員」と結びつけてから読む）。一覧・検索はできない。
+//   - 運営: staffs/{uid} がある端末だけ。登録は管理者が発行する使い捨ての登録URLで行う。
+//     role 'staff' = 受付スキャナー（読み取り・使用済み化）、'admin' = すべて。
+//
+// grace() は受付端末の登録が済むまでの移行措置。true の間だけ、未登録の端末でも
+// クーポン・招待QRの読み取りと使用済み化ができる（会員の名前・電話番号は読めない）。
+// 受付端末の登録が済んだら false にして出し直す。
 service cloud.firestore {
   match /databases/{database}/documents {
-    // クーポン運用に必要なコレクション
-    match /students/{doc}          { allow read, write: if true; }
-    match /campaigns/{doc}         { allow read, write: if true; }
-    match /coupons/{doc}           { allow read, write: if true; }
-    match /referral_qrs/{doc}      { allow read, write: if true; }
-    match /referral_rewards/{doc}  { allow read, write: if true; }
-    match /redemptions/{doc}       { allow read, write: if true; }
-    match /settings/{doc}          { allow read, write: if true; }
 
-    // 上記以外は拒否（デフォルト deny）
+    function grace() { return true; }
+
+    function signedIn() { return request.auth != null; }
+    function path(col, id) { return /databases/$(database)/documents/$(col)/$(id); }
+    function isStaff() { return signedIn() && exists(path('staffs', request.auth.uid)); }
+    function isAdmin() { return isStaff() && get(path('staffs', request.auth.uid)).data.role == 'admin'; }
+    function isOwner(sid) {
+      return signedIn()
+        && exists(path('links', request.auth.uid))
+        && get(path('links', request.auth.uid)).data.sid == sid;
+    }
+
+    // 画面に出す文字：タグや引用符を入れさせない（管理画面での書き換え攻撃を防ぐ）
+    function safeText(s, max) {
+      return s is string && s.size() <= max && !s.matches('(?s).*[<>&"\'`].*');
+    }
+    // クーポンは円建ての固定額のみ。％割引は禁止
+    function noPercent(s) { return !s.matches('(?s).*[%％].*'); }
+    function isToken(s) { return s is string && s.matches('[A-Za-z0-9_-]{8,80}'); }
+    function onlyChanged(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // ===== 会員 =====
+    function validStudent(d, selfJoin) {
+      return d.keys().hasOnly(['token', 'name', 'club', 'phoneLast4', 'createdAt', 'verifiedDevice', 'dupKey'])
+        && d.keys().hasAll(['token', 'name', 'club', 'phoneLast4', 'createdAt', 'verifiedDevice', 'dupKey'])
+        && isToken(d.token) && d.token.size() >= 20
+        && safeText(d.name, 40) && d.name.size() >= 1
+        && (selfJoin ? d.club in ['AGC', 'Bullets', 'AGC+Bullets'] : safeText(d.club, 40))
+        && d.phoneLast4 is string && d.phoneLast4.matches('[0-9]{4}')
+        && d.createdAt is string && d.createdAt.size() <= 40
+        && d.verifiedDevice is bool
+        && d.dupKey is string && d.dupKey.matches('[0-9a-f]{64}');
+    }
+    // 会員の作成は「token の引き当て表」と「重複確認の鍵」を同時に作るときだけ
+    function joinBatch(sid, d) {
+      return getAfter(path('student_tokens', d.token)).data.sid == sid
+        && getAfter(path('student_keys', d.dupKey)).data.sid == sid;
+    }
+
+    match /students/{sid} {
+      allow get: if isStaff() || isOwner(sid);
+      allow list: if isAdmin();
+      allow create: if signedIn() && sid.matches('[A-Za-z0-9_-]{8,80}')
+        && validStudent(request.resource.data, !isAdmin())
+        && joinBatch(sid, request.resource.data);
+      allow update: if isAdmin()
+        || (isOwner(sid) && onlyChanged(['verifiedDevice']) && request.resource.data.verifiedDevice == true);
+      allow delete: if isAdmin();
+    }
+
+    // マイページURLの token → 会員ID。token を知っている人だけが get できる
+    match /student_tokens/{token} {
+      allow get: if signedIn();
+      allow create: if signedIn() && isToken(token)
+        && request.resource.data.keys().hasOnly(['sid'])
+        && getAfter(path('students', request.resource.data.sid)).data.token == token;
+      allow delete: if isAdmin();
+    }
+
+    // 重複登録の確認用（名前＋電話下4桁のハッシュ）。だれも読めない。2回目の作成は失敗する
+    match /student_keys/{key} {
+      allow get, list: if isAdmin();
+      allow create: if signedIn() && key.matches('[0-9a-f]{64}')
+        && request.resource.data.keys().hasOnly(['sid'])
+        && getAfter(path('students', request.resource.data.sid)).data.dupKey == key;
+      allow delete: if isAdmin();
+    }
+
+    // この端末（匿名ログイン）が今どの会員のマイページを見ているか
+    match /links/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['sid', 'token'])
+        && getAfter(path('student_tokens', request.resource.data.token)).data.sid == request.resource.data.sid;
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    // ===== キャンペーン・設定（個人情報なし） =====
+    function validCampaign(d) {
+      return d.keys().hasOnly(['type', 'label', 'detail', 'expiresAt', 'createdAt'])
+        && safeText(d.type, 30) && safeText(d.label, 60) && d.label.size() >= 1 && safeText(d.detail, 200)
+        && noPercent(d.label) && noPercent(d.detail)
+        && (d.expiresAt == null || d.expiresAt is string);
+    }
+    match /campaigns/{cid} {
+      allow read: if true;
+      allow create, update: if isAdmin() && validCampaign(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && (!('referrerRewardLabel' in request.resource.data)
+            || (safeText(request.resource.data.referrerRewardLabel, 60) && noPercent(request.resource.data.referrerRewardLabel)));
+    }
+
+    // ===== クーポン =====
+    function validCoupon(d) {
+      return d.keys().hasOnly(['token', 'studentId', 'campaignId', 'type', 'label', 'detail', 'expiresAt', 'issuedAt', 'usedAt', 'usedBy'])
+        && isToken(d.token) && d.studentId is string
+        && safeText(d.type, 30) && safeText(d.label, 60) && d.label.size() >= 1 && safeText(d.detail, 200)
+        && noPercent(d.label) && noPercent(d.detail)
+        && (d.expiresAt == null || d.expiresAt is string)
+        && d.issuedAt is string && d.usedAt == null && d.usedBy == null;
+    }
+    // 会員が自分で受け取るクーポンは、配布中キャンペーンの写しだけ（1キャンペーン1枚）
+    function campaignCopy(cid, d) {
+      let cmp = get(path('campaigns', d.campaignId)).data;
+      return isOwner(d.studentId)
+        && d.campaignId is string
+        && cid == d.studentId + '_' + d.campaignId
+        && d.type == cmp.type && d.label == cmp.label && d.detail == cmp.detail
+        && d.expiresAt == cmp.expiresAt
+        && d.token.size() >= 20;
+    }
+    function redeemOnly(fields) {
+      return onlyChanged(fields) && resource.data.usedAt == null && request.resource.data.usedAt is string;
+    }
+
+    match /coupons/{cid} {
+      allow read: if isStaff() || isOwner(resource.data.studentId) || grace();
+      allow create: if validCoupon(request.resource.data) && (
+        isAdmin()
+        || ((isStaff() || grace()) && request.resource.data.type == 'referral_reward')
+        || campaignCopy(cid, request.resource.data)
+      );
+      allow update: if isAdmin()
+        || ((isStaff() || grace()) && redeemOnly(['usedAt', 'usedBy']) && safeText(request.resource.data.usedBy, 30));
+      allow delete: if isAdmin();
+    }
+
+    // ===== 友達招待QR =====
+    match /referral_qrs/{rid} {
+      allow read: if isStaff() || isOwner(resource.data.issuerStudentId) || grace();
+      allow create: if isAdmin() || (
+        isOwner(request.resource.data.issuerStudentId)
+        && request.resource.data.keys().hasOnly(['token', 'issuerStudentId', 'issuerName', 'issuedAt', 'expiresAt', 'usedAt', 'usedByName'])
+        && isToken(request.resource.data.token) && request.resource.data.token.size() >= 20
+        && request.resource.data.issuerName == get(path('students', request.resource.data.issuerStudentId)).data.name
+        && request.resource.data.issuedAt is string && request.resource.data.expiresAt is string
+        && request.resource.data.usedAt == null && request.resource.data.usedByName == null
+      );
+      allow update: if isAdmin()
+        || ((isStaff() || grace()) && redeemOnly(['usedAt', 'usedByName']) && safeText(request.resource.data.usedByName, 40));
+      allow delete: if isAdmin();
+    }
+
+    match /referral_rewards/{id} {
+      allow read: if isStaff() || isOwner(resource.data.studentId);
+      allow create: if (isStaff() || grace())
+        && request.resource.data.keys().hasOnly(['token', 'studentId', 'sourceReferralId', 'label', 'issuedAt', 'usedAt'])
+        && safeText(request.resource.data.label, 60) && noPercent(request.resource.data.label)
+        && request.resource.data.usedAt == null;
+      allow update, delete: if isAdmin();
+    }
+
+    match /redemptions/{id} {
+      allow read: if isAdmin();
+      allow create: if (isStaff() || grace())
+        && request.resource.data.keys().hasOnly(['kind', 'refId', 'at', 'by'])
+        && request.resource.data.kind in ['coupon', 'referral']
+        && request.resource.data.refId is string && request.resource.data.at is string
+        && safeText(request.resource.data.by, 30);
+      allow update, delete: if isAdmin();
+    }
+
+    // ===== 運営の端末 =====
+    // 登録には、登録URLの秘密の文字列を staff_claims に書き、そのハッシュが
+    // 未使用の staff_invites（または運用者だけが持つ非常用の鍵）と一致する必要がある。
+    function claimHash() {
+      return hashing.sha256(getAfter(path('staff_claims', request.auth.uid)).data.secret).toHexString().lower();
+    }
+    function viaInvite(d) {
+      let h = claimHash();
+      let inv = get(path('staff_invites', h)).data;
+      return d.inviteId == h && d.role == inv.role && d.label == inv.label
+        && request.time < inv.expiresAt
+        && !existsAfter(path('staff_invites', h));
+    }
+    function viaRootKey(d) {
+      return d.inviteId == 'root' && d.role == 'admin'
+        && claimHash() == '15016e9c4227c016e6ee117b60ff06ceeacd2f99be567ccc0957ea21fe363f06';
+    }
+
+    match /staffs/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['role', 'label', 'createdAt', 'inviteId', 'lastSeenAt'])
+        && request.resource.data.role in ['admin', 'staff']
+        && safeText(request.resource.data.label, 40)
+        && (viaInvite(request.resource.data) || viaRootKey(request.resource.data));
+      allow update: if isAdmin()
+        || (signedIn() && request.auth.uid == uid && onlyChanged(['lastSeenAt']));
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    match /staff_claims/{uid} {
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['secret'])
+        && request.resource.data.secret is string
+        && request.resource.data.secret.size() >= 20 && request.resource.data.secret.size() <= 200;
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    // 登録URLの控え（ドキュメントID = 秘密の文字列のハッシュ）。URLを持つ人だけが中身を get できる
+    match /staff_invites/{h} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && h.matches('[0-9a-f]{64}')
+        && request.resource.data.keys().hasOnly(['role', 'label', 'createdAt', 'expiresAt'])
+        && request.resource.data.role in ['admin', 'staff']
+        && safeText(request.resource.data.label, 40)
+        && request.resource.data.expiresAt is timestamp;
+      allow delete: if isAdmin()
+        || (signedIn() && getAfter(path('staffs', request.auth.uid)).data.inviteId == h);
+    }
+
+    // 上記以外は拒否
     match /{document=**} { allow read, write: if false; }
   }
 }
