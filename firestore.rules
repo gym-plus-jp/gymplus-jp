@@ -15,7 +15,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function grace() { return true; }
+    function grace() { return false; }
 
     function signedIn() { return request.auth != null; }
     function path(col, id) { return /databases/$(database)/documents/$(col)/$(id); }
